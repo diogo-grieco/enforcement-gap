@@ -1,0 +1,8 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+data_ibama/
+data_prodes/
+project2.duckdb
+.duckdb.exe
