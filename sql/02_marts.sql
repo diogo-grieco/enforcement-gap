@@ -25,14 +25,17 @@
 -- Filter v3 (3 cases; mirrors exploring_script.R, locked)
 -- DECISION (date): DAT_HORA_AUTO_INFRACAO (notice drafted,
 --   0% NA) instead of DT_FATO_INFRACIONAL (71% NA in the
---   filtered base). Same-year join validated in exploring:
---   59.2% of infraction records (n = 60,707; the lag validation's
---   unit is the notice, not the municipality-year) match
---   same-year; only_t (matches
---   same-year, no better lag alternative) = 4.7%; only_t1
---   (would match ONLY with a one-year lag) = 1.0% — corrected
---   2026-07-20, Fix S13: this comment previously read "4.8%/
---   0.7%", out of sync with exploring_script.R's own numbers.
+--   filtered base). Same-year join validated in exploring —
+--   the R categories are mutually exclusive: 59.2% of infraction
+--   records (n = 60,707; the lag validation's unit is the notice,
+--   not the municipality-year) match BOTH windows (material
+--   pressure in year t AND t-1); only_t (same-year only) = 4.7%
+--   — total same-year match: 63.9% (59.2 + 4.7); only_t1 (would
+--   match ONLY with a one-year lag) = 1.0%. Corrected 2026-07-21,
+--   Fix S20: this comment (and three sibling docs) labeled the
+--   59.2% "both" category as the plain same-year share,
+--   understating the same-year match. Previously corrected
+--   2026-07-20, Fix S13 ("4.8%/0.7%" out of sync with R).
 -- KNOWN LIMITATION (Fix S8, undocumented until now): the PRODES
 --   "year" is not a calendar year — INPE's official rate covers
 --   Aug 1 (year t-1) to Jul 31 (year t) — while IBAMA's `year`

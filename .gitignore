@@ -9,3 +9,7 @@ output/
 project2.duckdb
 duckdb.exe
 *.wal
+
+# entregáveis (relatórios .docx/.html) — distribuídos por fora do repo
+# (Zenodo/preprint), não versionados
+entregaveis/

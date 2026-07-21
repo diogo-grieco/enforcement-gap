@@ -98,9 +98,11 @@
 --     (Aug 1, year t-1 - Jul 31, year t) against IBAMA's calendar year
 --     (Jan-Dec, from DAT_HORA_AUTO_INFRACAO) as if they were the same
 --     window. They overlap for only ~7 of 12 months. The same-year-join
---     lag validation in exploring_script.R (59.2% same-year / 4.7%
---     only_t / 1.0% only_t1 / 35.1% never — shares of the 60,707
---     infraction records, not of municipality-years) was run on this calendar-year
+--     lag validation in exploring_script.R (59.2% both windows t and
+--     t-1 / 4.7% only_t / 1.0% only_t1 / 35.1% never — total same-year
+--     match 63.9%; shares of the 60,707 infraction records, not of
+--     municipality-years; category labels corrected 2026-07-21, Fix
+--     S20) was run on this calendar-year
 --     basis, not against the true PRODES window — the lag figures may
 --     partly reflect this mismatch rather than genuine reporting delay.
 --     Not corrected in v5; a reader with remote-sensing background will
