@@ -1,0 +1,606 @@
+# exploring_script.R — Guia Comentado (Material de Estudo)
+
+**Base:** `exploring_script.R` v4.4-2026-07-20 (inclui, desde esta versão, as validações empíricas da redesign de 2026-07-20 — antes rascunhadas como `exploring_script_additions_proposal.R`, hoje incorporadas ao próprio script; ver §§9–10).
+**Propósito deste documento:** não é um script — não roda. É uma leitura acompanhada, trecho por trecho, explicando o que cada parte faz, por que foi escrita assim, quais os mecanismos de R/tidyverse envolvidos, e quais alternativas existiam. Serve para revisão própria (entrevista técnica, defesa de portfólio, retomada do projeto depois de um tempo parado).
+
+Convenção: bloco de código primeiro (idêntico ao arquivo original), explicação em prosa depois. Onde relevante, aponto a ligação com decisões do pipeline SQL (`01-04_*.sql`) ou com fixes documentados em `p2_technical_fixes.txt`.
+
+---
+
+## 0. Padrão geral do script — o que perceber antes de entrar nos detalhes
+
+Duas ideias organizam o arquivo inteiro, e vale nomeá-las antes de ler linha a linha:
+
+**Constante nomeada + `stopifnot()` logo depois de cada transformação.** Toda vez que o script cria ou transforma uma tabela, o número esperado (linhas, NAs, contagem de um subconjunto) já estava anotado como constante no topo do arquivo (`NROW_IBAMA_RAW`, `N_ABSOLUTE_GAP` etc.), e um `stopifnot()` imediatamente após a transformação confere se a realidade bate com o que foi documentado. Isso transforma qualquer mudança silenciosa nos dados brutos (nova coleta do IBAMA, atualização do PRODES) em um erro alto e claro, em vez de um número errado se propagando silenciosamente pipeline abaixo. É o mesmo princípio de um teste de regressão em software, aplicado a dados.
+
+**Comentário com o resultado, código que o produz logo abaixo.** Quase toda seção segue o padrão "aqui está o que encontramos (comentário) → aqui está o código que gera isso (executável)". Isso é o que torna o script auditável: qualquer leitor pode reexecutar qualquer afirmação numérica feita em comentário. As duas exceções que restam sem código de suporte direto no arquivo (achados retidos de uma análise pontual anterior, não reproduzidos aqui) estão sinalizadas abaixo, no ponto onde aparecem.
+
+---
+
+## 1. Cabeçalho e pacotes
+
+```r
+library(tidyverse)
+```
+
+`tidyverse` não é um pacote — é um meta-pacote que carrega e anexa (`attach`) oito pacotes de uma vez: `dplyr` (manipulação de tabelas), `readr` (leitura de arquivos), `tidyr` (reshape, `pivot_longer` etc.), `purrr` (programação funcional, `map()`), `stringr` (strings), `lubridate` (datas), `tibble` e `forcats` (fatores). Ao carregar, o R imprime um aviso de conflito:
+
+```
+✖ dplyr::filter() masks stats::filter()
+✖ dplyr::lag()    masks stats::lag()
+```
+
+Isso significa que, a partir desse `library()`, chamar `filter()` ou `lag()` sem prefixo usa a versão do `dplyr`, não a de `stats` (que já vem carregado por padrão em qualquer sessão R e faz filtragem de séries temporais, não de linhas de tabela). Isso não é um bug — é o comportamento normal e esperado do tidyverse — mas é o tipo de coisa que pode confundir alguém que espera `filter()` de séries temporais. Se algum dia este projeto precisasse do `filter()` de `stats`, seria necessário escrever `stats::filter()` explicitamente.
+
+`library(scales)` foi removida do arquivo — estava carregada mas nenhuma função do pacote (`percent()`, `comma()`, `dollar()` etc.) era chamada em nenhum lugar do código executável. Import morto é um cheiro de código: sinaliza uma intenção que nunca foi concretizada, ou um resquício de uma versão anterior do script.
+
+---
+
+## 2. Paths e arquivos
+
+```r
+PATH_IBAMA    <- "data_ibama"
+PATTERN_IBAMA <- "auto_infracao_ano_.*\\.csv"
+PATH_PRODES   <- "data_prodes"
+FILE_PRODES   <- "terrabrasilis_legal_amazon_25_04_2026_1777126839450.csv"
+PATH_IPCA     <- "data_ipca"
+FILE_IPCA     <- "sidra_1737_v2266_ipca_indice_200801_202512_2026_07_10.csv"
+```
+
+Convenção `ALL_CAPS` para "isto é uma constante, não deveria mudar durante a execução" — o R não tem constantes de verdade (nada impede reatribuir `PATH_IBAMA <- "outra_coisa"` mais adiante), é puramente uma convenção de leitura, igual em Python ou C.
+
+`PATTERN_IBAMA` é uma *regex* (expressão regular), não um glob de shell — é o segundo argumento de `list.files()`, que espera regex. `"auto_infracao_ano_.*\\.csv"` lê-se: literal `auto_infracao_ano_`, seguido de qualquer sequência de caracteres (`.*`), seguido de um ponto literal escapado (`\\.` — o duplo `\\` é necessário porque, dentro de uma string R, um único `\` já é ele mesmo um caractere de escape da string; para a regex receber um único `\.` literal, a string R precisa conter `\\.`) e `csv` literal. `FILE_PRODES`/`FILE_IPCA` são nomes de arquivo exatos, sem wildcard — porque PRODES e IPCA vêm como um arquivo único por download, enquanto IBAMA vem em um CSV por ano (daí a necessidade de padrão + agregação, ver §4.2).
+
+**Nota:** estes seis paths são relativos ao diretório de trabalho do processo R. Isso é exatamente o mesmo problema que motivou o Fix 14 no pipeline SQL (`SET VARIABLE data_root`) — o R script nunca recebeu o tratamento equivalente (sinalizado em `p2_technical_fixes.txt`, ainda pendente). Uma alternativa viável seria um `DATA_ROOT <- here::here()` (pacote `here`) ou uma variável de ambiente lida via `Sys.getenv()`, ambos mais portáveis que o path relativo puro usado aqui.
+
+---
+
+## 3. Checkpoints de integridade de dados
+
+```r
+NROW_IBAMA_RAW       <- 309116
+NCOL_IBAMA_RAW       <- 84
+NROW_IBAMA_FILTERED  <- 60707
+TOTAL_IBAMA_FINES    <- 26814492927
+NA_IBAMA_DATES       <- 0
+NROW_PRODES_RAW      <- 14490
+NCOL_PRODES_RAW      <- 5
+N_ABSOLUTE_GAP       <- 3063
+N_RECOVERED_GAP_T1   <- 724
+NROW_IPCA_RAW        <- 216
+NROW_IBAMA_LAG_BASE  <- 17642
+N_IBAMA_LAG_NEGATIVE <- 355
+NROW_IBAMA_LAG       <- 17287
+
+N_NO_PRESSURE          <- 8142   # area_km2 < 1 (56.2% of panel)
+N_MEASURED_GAP         <- 3285   # complements N_ABSOLUTE_GAP (3,063)
+N_FLOOR_ACTIVE         <- 28     # measured_gap years where raw denominator < 1
+N_RECLASS_MATERIALITY  <- 3291   # panel rows with 0.0625 <= area_km2 < 1
+N_MUNI_WITH_PRESSURE   <- 552    # municipalities with >= 1 pressure year
+```
+
+Cada uma dessas constantes — as treze originais e as cinco da redesign (`N_NO_PRESSURE` a `N_MUNI_WITH_PRESSURE`, incorporadas na v4.4) — é referenciada em pelo menos um `stopifnot()` mais adiante no arquivo; nenhuma é órfã, nenhuma é usada duas vezes com significados diferentes. Duas são deliberadamente *reutilizadas* com o mesmo significado desde a v4.4: `NROW_PRODES_RAW` (o painel `egs_panel` herda a contagem de linhas do PRODES) e `N_ABSOLUTE_GAP` (a classificação do painel deve reproduzir os mesmos 3.063 da análise de sensibilidade do §7). Vale conferir isso deliberadamente quando se lê um script assim: toda constante "mágica" deveria ter um único ponto de uso claro; se você achar uma constante nunca referenciada, é sinal de código morto ou de uma verificação que foi removida sem limpar a declaração.
+
+`stopifnot()` (usado a partir daqui inteiro no arquivo) recebe um vetor nomeado de expressões lógicas. R avalia cada expressão em ordem; na primeira que for `FALSE` (ou não for `TRUE`), a execução para e a mensagem de erro impressa é o *nome* daquele elemento do vetor — por isso os nomes são frases descritivas ("ibama_raw: unexpected row count"), não apenas rótulos técnicos. Isso é o que torna a mensagem de erro imediatamente legível sem precisar abrir o código para entender o que quebrou.
+
+---
+
+## 4. IBAMA DATA
+
+### 4.1 Checagem de encoding
+
+```r
+readr::guess_encoding(
+  list.files(PATH_IBAMA,
+             PATTERN_IBAMA,
+             full.names = TRUE)[[1]])
+```
+
+`guess_encoding()` não lê o arquivo inteiro — faz uma amostragem estatística de bytes e estima, por frequência de padrões de byte, qual encoding é mais provável (UTF-8, windows-1252 etc.), retornando uma tabela de candidatos com um score de confiança. Isso importa especialmente para dados brasileiros: campos como `"Não se Aplica"` têm caracteres acentuados que corrompem silenciosamente (viram `"NÃ£o se Aplica"` ou pior) se o encoding for assumido errado na leitura. O resultado aqui (UTF-8, confiança 1.0) é usado só visualmente — o valor retornado não é capturado em variável nem passado programaticamente para o `locale()` da leitura seguinte; o "UTF-8" hardcoded em `read_delim(locale = locale(encoding = "UTF-8"))` foi decidido a partir da leitura do olho neste resultado, não automatizado. Para um pipeline mais defensivo, seria possível capturar `guess_encoding(...)$encoding[1]` e injetar isso diretamente no `locale()`, mas para um script de exploração de dados de fonte única e já conhecida, fixar o valor manualmente é uma simplificação razoável.
+
+Nota de estilo (do audit): esta é a única função no arquivo chamada com prefixo de pacote explícito (`readr::`), quando todo o resto do arquivo usa as funções do tidyverse sem prefixo (já que `library(tidyverse)` as anexou). Não é erro, é uma inconsistência de convenção.
+
+### 4.2 Agregando os arquivos IBAMA
+
+```r
+read_ibama_files <- function(path_ibama, pattern_ibama) {
+  list.files(path_ibama,
+             pattern_ibama,
+             full.names = TRUE) %>%
+    map(read_delim,
+        delim = ";",
+        locale = locale(encoding = "UTF-8"),
+        col_types = cols(.default = "c"),
+        show_col_types = FALSE) %>%
+    list_rbind()
+}
+ibama_raw <- read_ibama_files(PATH_IBAMA, PATTERN_IBAMA)
+```
+
+`list.files()` retorna um vetor de paths (um por ano). `map()` (do `purrr`) aplica `read_delim` a cada elemento desse vetor, produzindo uma *lista* de tibbles — um por arquivo/ano. `list_rbind()` empilha essa lista em uma única tibble, coluna a coluna por nome (não por posição) — se um ano tivesse uma coluna a mais ou a menos, o resultado teria `NA` nas células ausentes, não um erro (vale saber disso como um modo de falha silenciosa possível, ainda que não tenha ocorrido aqui, confirmado pelo `stopifnot` de contagem de colunas logo abaixo).
+
+`col_types = cols(.default = "c")` força *toda* coluna a ser lida como texto (`character`), mesmo colunas que pareçam numéricas ou de data. Isso é uma escolha defensiva deliberada: a inferência automática de tipo do `readr` pode fazer coisas indesejadas com dados brasileiros — um geocode como `"0500204"` viraria o número `500204` (perdendo o zero à esquerda) se lido como inteiro; um valor monetário como `"1.234,56"` seria mal interpretado se o `readr` tentasse adivinhar o tipo numérico sem saber que a vírgula é o separador decimal aqui. Ler tudo como texto adia toda conversão de tipo para chamadas explícitas de `as.numeric()`/`as.integer()` mais adiante, sob controle total do autor — o padrão "leia cru, converta explicitamente" é considerado boa prática justamente por isso.
+
+Note que a função recebe `path_ibama`/`pattern_ibama` como parâmetros locais (minúsculo), e é chamada passando as constantes globais `PATH_IBAMA`/`PATTERN_IBAMA` (maiúsculo) como argumentos. Isso evita um problema de estilo que existia numa versão anterior deste script: os parâmetros da função tinham o mesmo nome, em maiúsculo, das constantes globais — o que não causava bug (o escopo local de uma função R sempre tem precedência), mas confundia visualmente, já que maiúsculo normalmente sinaliza "constante global" em R, não "parâmetro de função".
+
+### 4.3 Número de linhas e colunas
+
+```r
+nrow(ibama_raw)
+ncol(ibama_raw)
+```
+
+Duas chamadas soltas, sem atribuição — em um script rodado com `source(..., echo = TRUE)` (como no seu console), cada uma imprime seu valor no topo do nível (`[1] 309116`, `[1] 84`), mas nada é capturado em variável. Isso é intencional para um script de *exploração*: o objetivo é permitir a leitura visual do resultado, não computar algo que será usado adiante. Contraste com um pipeline de produção, onde você normalmente capturaria isso (`n_raw <- nrow(ibama_raw)`) para uso posterior ou teste automatizado — aqui, quem faz esse papel é o `stopifnot()` que já rodou logo antes.
+
+### 4.4 Explorando filtros de infração
+
+```r
+DEFORESTATION_CODES <- c(
+  "409907",  # Destroy, clear, or damage native forests or vegetation
+  "409901",  # Destroy or damage forests in permanent preservation areas (APP)
+  "452001",  # Destroy/clear forests in APP (art. 2, Law 4,771)
+  "430001",  # Clear forests without IBAMA authorization
+  "431003",  # Destroy or damage forests in specially protected areas (art. 225, Federal Constitution)
+  "468001"   # Destroy native or planted mangrove-protecting forests
+)
+
+ibama_filtered <- ibama_raw %>%
+  filter(
+    SIT_CANCELADO         == "N",
+    DES_STATUS_FORMULARIO == "Lavrado",
+    (
+      (TIPO_INFRACAO == "Flora" & INFRACAO_AREA == "Desmatamento") |
+        (TIPO_INFRACAO == "Flora" &
+           is.na(INFRACAO_AREA) &
+           COD_INFRACAO %in% DEFORESTATION_CODES) |
+        (is.na(TIPO_INFRACAO) &
+           INFRACAO_AREA == "Desmatamento")
+    )
+  )
+```
+
+O bloco de comentário logo acima desse código (contagens de `TIPO_INFRACAO`, `INFRACAO_AREA`, `DES_STATUS_FORMULARIO`, `SIT_CANCELADO`, `COD_INFRACAO`) é o "mostre seu trabalho" da decisão de filtro: antes de escrever a condição, o script documenta a distribuição de valores que justifica cada ramo do filtro. Isso importa porque um filtro de 3 casos, sem essa documentação, pareceria arbitrário para qualquer leitor futuro (inclusive você mesmo, daqui a um ano).
+
+Mecânica do `filter()`: múltiplos argumentos separados por vírgula dentro de `filter()` são combinados com E lógico implícito — logo, as três condições `SIT_CANCELADO == "N"`, `DES_STATUS_FORMULARIO == "Lavrado"` e o grande parêntese com os três casos são todas exigidas simultaneamente. Dentro do parêntese grande, os três casos são unidos por OU (`|`) explícito.
+
+Gotcha clássico do R, presente implicitamente aqui: `x == NA` nunca retorna `TRUE` ou `FALSE` — sempre retorna `NA`. Por isso o Caso 2 e o Caso 3 usam `is.na(INFRACAO_AREA)` / `is.na(TIPO_INFRACAO)` explicitamente, em vez de tentar comparar contra `NA` com `==`. Quem não conhece essa regra tende a escrever `INFRACAO_AREA == NA` esperando capturar os nulos, e o filtro simplesmente não captura nada (silenciosamente).
+
+Precedência de operadores: `&` liga mais forte que `|` em R (igual a `&&`/`||` em quase toda linguagem C-like), então `A & B | C & D` é lido como `(A & B) | (C & D)`, não `A & (B | C) & D`. O parêntese explícito ao redor de cada Caso aqui não é estritamente necessário pela precedência (já ficaria certo sem eles), mas ajuda a leitura humana — uma prática recomendável mesmo quando "tecnicamente" redundante.
+
+Alternativa de design digna de nota: hoje o filtro só retorna as linhas que passam, sem registrar *qual* dos três casos cada linha satisfez. Uma versão mais auditável poderia usar `case_when()` para criar uma coluna `filter_reason` (`"case_1"`, `"case_2"`, `"case_3"`, `NA` para as excluídas) antes de filtrar — permitindo depois checar quantas linhas vieram de cada caso sem precisar re-derivar a lógica.
+
+### 4.5 Explorando filtros de data
+
+```r
+ibama_filtered <- ibama_filtered %>%
+  mutate(year = year(ymd(DAT_HORA_AUTO_INFRACAO)))
+stopifnot(
+  "unexpected year NAs" =
+    sum(is.na(ibama_filtered$year)) == NA_IBAMA_DATES
+)
+```
+
+O comentário acima deste trecho documenta a decisão mais importante de todo o script: entre cinco colunas de data candidatas (`DAT_HORA_AUTO_INFRACAO`, `DAT_CIENCIA_AUTUACAO`, `DT_FATO_INFRACIONAL`, `DT_INICIO_ATO_INEQUIVOCO`, `DT_FIM_ATO_INEQUIVOCO`), só `DAT_HORA_AUTO_INFRACAO` tem 0% de valores nulos — as outras quatro têm 12% a 71% de NA. A coluna escolhida representa "data em que o auto foi lavrado", não "data em que a infração de fato ocorreu" — um trade-off deliberado entre completude de dado e precisão semântica. Essa escolha é exatamente o que a Análise 2 (§4.7) quantifica: o lag entre "fato" e "lavratura" tem mediana de 6 dias mas média de 278 dias (distribuição de cauda longa), então usar a data de lavratura introduz algum viés temporal, mas usar `DT_FATO_INFRACIONAL` descartaria 71% dos registros — pior trade-off.
+
+`ymd()` (lubridate) faz parsing de strings no formato ano-mês-dia; se uma string não bater com esse formato, o retorno é `NA` com um aviso — então o `stopifnot` logo abaixo cumpre dupla função: confirma que não há nulos *e* confirma implicitamente que todos os valores foram parseados como datas válidas (um parsing malsucedido também produziria `NA`, indistinguível de um nulo original neste check).
+
+`year()` extrai o componente de ano de um objeto `Date`. Essa variável `year` se torna a chave temporal usada no restante do script (e, por espelhamento direto, em `p.year = i.year` no `03_analytics.sql`) — é o ano que ancora o "same-year join" entre IBAMA e PRODES (§6).
+
+### 4.6 Explorando valores de multa
+
+```r
+ibama_filtered <- ibama_filtered %>%
+  mutate(
+    geocode_ibge = COD_MUNICIPIO,
+    fine_value   = as.numeric(str_replace(VAL_AUTO_INFRACAO, ",", "."))
+  )
+stopifnot(
+  "incorrect total fine value" =
+    isTRUE(all.equal(sum(ibama_filtered$fine_value, na.rm = TRUE),
+                     TOTAL_IBAMA_FINES))
+)
+```
+
+`str_replace(VAL_AUTO_INFRACAO, ",", ".")` troca a primeira ocorrência de vírgula por ponto em cada string — necessário porque dados brasileiros usam vírgula como separador decimal (`"1234,56"`), e `as.numeric()` do R só entende ponto (`"1234.56"`); sem essa troca, `as.numeric("1234,56")` retornaria `NA` silenciosamente (com aviso). O comentário acima já documenta que 356 valores (0.6%) não convertem (viram `NA`) — isso é esperado e contabilizado, não um bug escondido; o aviso de "NAs introduced by coercion" que o R emite ao rodar essa linha é, portanto, um aviso conhecido e aceito, não um sinal de alarme.
+
+`isTRUE(all.equal(a, b))` em vez de `a == b`: comparação direta de ponto flutuante (`==`) é arriscada quando o valor vem de somar ~60 mil números decimais — erros de arredondamento de ponto flutuante (IEEE 754) podem fazer `a == b` retornar `FALSE` mesmo quando matematicamente `a` e `b` deveriam ser iguais. `all.equal()` compara com uma tolerância numérica pequena por padrão; `isTRUE()` é necessário porque `all.equal()` não retorna `TRUE`/`FALSE` quando os valores diferem — retorna uma *string* descrevendo a diferença, e `isTRUE()` transforma qualquer coisa que não seja literalmente `TRUE` em `FALSE` para o `stopifnot` funcionar corretamente. Este é o mesmo princípio por trás do Fix 1 do pipeline SQL (contaminação de ponto flutuante na classificação `tipo_egs`/`gap_type`) — o mesmo cuidado aparece aqui, no R, de forma preventiva.
+
+### 4.7 Explorando lags internos do IBAMA
+
+```r
+ibama_filtered %>%
+  mutate(month = month(ymd(DAT_HORA_AUTO_INFRACAO))) %>%
+  count(month) %>%
+  mutate(pct = round(n / sum(n) * 100, 1)) %>%
+  arrange(month)
+```
+
+Padrão idiomático de "tabela de distribuição": `count(x)` agrupa e conta ocorrências de cada valor de `x` numa coluna `n`; `mutate(pct = round(n / sum(n) * 100, 1))` transforma essa contagem em percentual sobre o total. Este bloco é puramente contextual — não alimenta nenhuma decisão downstream do pipeline; está aqui para documentar que a lavratura de autos se concentra em set-out (pico de estação seca), um dado substantivo interessante mas sem consequência metodológica direta.
+
+```r
+ibama_lag <- ibama_filtered %>%
+  transmute(
+    lag_days = as.numeric(ymd(DAT_HORA_AUTO_INFRACAO) - ymd(DT_FATO_INFRACIONAL)),
+    fine_value
+  ) %>%
+  filter(!is.na(lag_days))
+stopifnot(
+  "ibama_lag: unexpected base row count" =
+    nrow(ibama_lag) == NROW_IBAMA_LAG_BASE,
+  "ibama_lag: unexpected negative-lag count" =
+    sum(ibama_lag$lag_days < 0) == N_IBAMA_LAG_NEGATIVE
+)
+
+ibama_lag <- ibama_lag %>%
+  filter(lag_days >= 0)
+stopifnot(
+  "ibama_lag: unexpected row count after discarding negatives" =
+    nrow(ibama_lag) == NROW_IBAMA_LAG
+)
+```
+
+`transmute()` é como `mutate()`, mas descarta todas as colunas originais, mantendo só as computadas/listadas explicitamente — aqui, `lag_days` e `fine_value` (as únicas duas colunas necessárias para o resto da análise). É a ferramenta certa quando você quer construir uma tabela derivada minimalista, em vez de carregar 84 colunas originais adiante.
+
+`ymd(A) - ymd(B)` entre dois objetos `Date` retorna um `difftime` — um objeto que carrega tanto o número quanto a unidade (dias, neste caso, escolhida automaticamente pelo R porque ambos os operandos são `Date` puros, sem componente de hora). `as.numeric()` descarta a unidade e fica só com o número. Vale registrar como cuidado geral: se os dois lados fossem `POSIXct` (data-hora) em vez de `Date`, a unidade padrão do `difftime` poderia silenciosamente ser segundos em vez de dias, e `as.numeric()` sem checar a unidade produziria números de "dias" que na verdade seriam segundos — um erro clássico de conversão de data no R.
+
+Note a estrutura em dois estágios com dois `stopifnot()`: primeiro confere a base antes do filtro de negativos (17.642 linhas, 355 negativas), depois confere de novo depois do filtro (17.287 linhas). Isolar a checagem em duas etapas, uma antes e outra depois da transformação, é o que permite saber exatamente qual etapa quebrou se algum número mudar no futuro — se só houvesse um `stopifnot` no final, um erro te diria "algo mudou" sem te dizer se foi na leitura da data, no cálculo do lag, ou no filtro de negativos.
+
+Os 355 registros com lag negativo (data do fato registrada *depois* da lavratura do auto) foram descartados sem uma explicação causal confirmada — pode ser erro de digitação, ou pode ser um campo que captura algo conceitualmente diferente em alguns registros (uma infração contínua, por exemplo). Como é 2% da base, descartar é uma decisão de custo-benefício razoável, mas é importante notar que é uma decisão, não uma verdade estabelecida.
+
+```r
+ibama_lag %>%
+  summarise(
+    n      = n(),
+    median = median(lag_days),
+    mean   = round(mean(lag_days), 0),
+    p75    = quantile(lag_days, .75),
+    p90    = quantile(lag_days, .90),
+    max    = max(lag_days)
+  )
+```
+
+`quantile(x, p)` por padrão usa o algoritmo "tipo 7" do R (existem 9 tipos possíveis, cada um com uma regra de interpolação ligeiramente diferente para posições não-inteiras) — é o mesmo default usado por `ggplot2`, `dplyr` e a maioria do R base, então geralmente não precisa ser mencionado, mas vale saber que existe caso algum dia seja preciso reconciliar um número com uma ferramenta que usa outro default (Excel, por exemplo, usa uma variante diferente).
+
+```r
+ibama_lag %>%
+  mutate(
+    lag_bucket = case_when(
+      lag_days <= 7   ~ "<=7 days",
+      lag_days <= 30  ~ "8-30 days",
+      lag_days <= 365 ~ "31-365 days",
+      lag_days <= 730 ~ "1-2 years",
+      TRUE            ~ ">2 years"
+    ),
+    lag_bucket = factor(lag_bucket, levels = c(
+      "<=7 days", "8-30 days", "31-365 days", "1-2 years", ">2 years"
+    ))
+  ) %>%
+  group_by(lag_bucket) %>%
+  summarise(n = n(), median_fine = median(fine_value, na.rm = TRUE)) %>%
+  arrange(lag_bucket)
+```
+
+`case_when()` avalia as condições em ordem e para na primeira verdadeira — por isso `lag_days <= 30` não precisa reescrever `lag_days > 7 & lag_days <= 30`: qualquer valor que já tivesse satisfeito `lag_days <= 7` nunca chega a ser testado contra a segunda condição. É um comportamento parecido com uma cadeia de `if/else if` em outras linguagens, e é fácil escrever `case_when()` errado se você esquecer que a ordem importa e as condições não são mutuamente exclusivas por si mesmas (aqui elas são cumulativas, o que é o que torna a omissão do limite inferior segura).
+
+`factor(lag_bucket, levels = c(...))` é o que garante que `arrange(lag_bucket)` ordene os buckets cronologicamente (`<=7 days` → `8-30 days` → ... → `>2 years`) em vez de alfabeticamente. Sem essa conversão para fator com níveis explícitos, `"1-2 years"` ordenaria antes de `"31-365 days"` como string (porque `"1"` < `"3"` lexicograficamente) — um bug real que este código evita deliberadamente.
+
+`median_fine`, não `mean_fine`: a distribuição de multas é extremamente assimétrica à direita (mediana ≈ R$75,3k, média ≈ R$444k, máximo R$62,6M, ver §4.6) — resumir com a média seria enganoso (puxado para cima por poucos casos extremos), a mediana é a medida de tendência central correta aqui.
+
+---
+
+## 5. PRODES DATA
+
+### 5.1 Encoding / importação
+
+```r
+prodes_raw <- read_delim(
+  file.path(PATH_PRODES, FILE_PRODES),
+  delim = ";",
+  col_types      = cols(.default = "c"),
+  show_col_types = FALSE
+)
+```
+
+Mesma lógica do IBAMA (§4.2): tudo lido como texto, conversão de tipo adiada e explícita. Diferença notável: `FILE_PRODES` é um nome de arquivo exato (com um sufixo de exportação/timestamp do TerraBrasilis), não um padrão — porque o PRODES vem como um único arquivo consolidado, ao contrário do IBAMA (um CSV por ano).
+
+### 5.2 Limpeza dos dados PRODES
+
+```r
+prodes_clean <- prodes_raw %>%
+  mutate(
+    year         = as.integer(year),
+    area_km2     = as.numeric(str_replace(`area km²`, ",", "."))
+  ) %>%
+  select(geocode_ibge, mun, year, area_km2)
+```
+
+`mutate(year = as.integer(year))`: o lado direito (`year`, a coluna original de texto) é avaliado *antes* da substituição — o dplyr computa usando o valor atual da coluna e só depois sobrescreve o nome `year` com o resultado. Escrever `x = f(x)` dentro de um único `mutate()` é seguro e comum em R, mas vale entender o mecanismo para não se confundir achando que é uma referência circular.
+
+`` `area km²` ``: crases (backticks) são necessárias porque o nome da coluna tem espaço e um caractere Unicode (²) — nomes assim não são identificadores sintaticamente válidos em R sem essa proteção.
+
+`select()` no final descarta silenciosamente todas as outras colunas originais do PRODES, mantendo só as quatro necessárias. Prática recomendável (não carregar adiante o que não será usado), com o trade-off de que, se uma análise futura precisar de outra coluna do PRODES bruto, será preciso voltar e editar esta etapa.
+
+### 5.3 Exploração geral
+
+```r
+prodes_clean %>%
+  summarise(
+    municipalities = n_distinct(mun),
+    years          = n_distinct(year),
+    IBGE           = n_distinct(geocode_ibge),
+    total_rows     = n()
+  )
+```
+
+`n_distinct(x)` é equivalente a `length(unique(x))`, mas mais idiomático dentro de um pipe do dplyr e geralmente mais rápido internamente. A diferença entre `municipalities` (800, por nome) e `IBGE` (805, por geocode) é o próprio achado documentado no comentário acima: 5 pares de municípios homônimos entre estados diferentes (por isso `mun` sozinho nunca deve ser usado como chave de join — só `geocode_ibge`).
+
+O comentário sobre "quebras estruturais" (2008–2025, comparação com taxa oficial do INPE) resume a investigação do Fix 15 — o detalhamento completo (ano a ano, fontes da verificação externa) está em `p2_technical_fixes.txt`, não repetido aqui para não duplicar. Desde a v4.4, esse comentário reporta os quatro anos-âncora individualmente (2008/2012/2024 dentro de ~3%; 2025 fora, −8,3% a −9,3%, provável estimativa preliminar do PRODES — Fix S9), no lugar da antiga afirmação "diff. <5%", que o âncora de 2025 não satisfazia.
+
+### 5.4 Consistency checks
+
+```r
+setdiff(ibama_codes, prodes_codes) %>% length()   # 2128
+setdiff(prodes_codes, ibama_codes) %>% length()   # 127
+intersect(ibama_codes, prodes_codes) %>% length() # 678
+```
+
+`setdiff(A, B)` retorna os elementos de `A` que não estão em `B` — a operação **não é simétrica**: `setdiff(A, B)` e `setdiff(B, A)` normalmente dão resultados diferentes (como aqui: 2.128 vs. 127). É um erro comum trocar a ordem dos argumentos por descuido; vale sempre ler o nome das variáveis no comentário ao lado para confirmar qual conjunto é o "de referência". `intersect()` é simétrico (a ordem não importa para o resultado, só para performance marginal).
+
+Substantivamente: os 2.128 códigos que aparecem só no IBAMA e não no PRODES são municípios fora da Amazônia Legal (IBAMA é fiscalização nacional; PRODES cobre só a Amazônia Legal, 805 municípios) — não é inconsistência de dado, é diferença de escopo geográfico, e é exatamente a limitação que motiva o Fix 6 (expansão futura para outros biomas via join espacial).
+
+---
+
+## 6. Explorando lags entre IBAMA e PRODES
+
+```r
+lag_check <- ibama_filtered %>%
+  select(geocode_ibge, year) %>%
+  left_join(
+    prodes_clean %>% select(geocode_ibge, year, area_t = area_km2),
+    by = c("geocode_ibge", "year")
+  ) %>%
+  left_join(
+    # t-1 deforestation: PRODES t+1
+    prodes_clean %>%
+      mutate(year = year + 1L) %>%
+      select(geocode_ibge, year, area_t1 = area_km2),
+    by = c("geocode_ibge", "year")
+  ) %>%
+  mutate(
+    match_t  = !is.na(area_t)  & area_t  >= 1,
+    match_t1 = !is.na(area_t1) & area_t1 >= 1
+  )
+```
+
+Este é o trecho mais denso do script — vale destrinchar com calma. A pergunta que ele responde: quando o IBAMA lavra um auto no ano X, o desmatamento correspondente no PRODES aconteceu no mesmo ano X (`area_t`), ou no ano anterior X-1 (`area_t1`)?
+
+O primeiro `left_join` é direto: junta PRODES do mesmo ano (`area_t`). O segundo é o truque conceitual: para descobrir se o desmatamento aconteceu no ano *anterior* ao auto, em vez de deslocar o ano do IBAMA para trás, o código desloca o ano do **PRODES para frente** (`mutate(year = year + 1L)`) antes de fazer o join pela mesma chave (`geocode_ibge`, `year`). Um registro do PRODES originalmente do ano 2019, depois desse `mutate`, é relabeled como ano 2020 só para fins deste join — então, quando ele encontra um auto do IBAMA também de 2020, o match representa "houve desmatamento em 2019 (t-1) e um auto em 2020 (t)". É matematicamente equivalente a deslocar o IBAMA para trás, mas operacionalmente mais simples porque mantém o IBAMA como a tabela "âncora" nos dois joins.
+
+`mean(logical_vector)` (usado logo abaixo, em `summarise`) é um idiomatismo do R que vale destacar: `TRUE`/`FALSE` são coagidos a `1`/`0` quando usados em contexto numérico, então `mean()` de um vetor lógico é exatamente a proporção de `TRUE` nesse vetor. É uma forma compacta e muito comum de calcular percentuais sem escrever `sum(x) / length(x) * 100` manualmente — usada aqui e também na Análise 1 (§4.7) via `count()`/`mutate(pct = ...)`.
+
+Este bloco inteiro é a justificativa empírica direta para uma decisão do pipeline SQL: `03_analytics.sql` junta IBAMA e PRODES pelo **mesmo ano** (`p.year = i.year`), não com lag — porque 59,2% dos casos batem no mesmo ano e só 1,0% bateria exclusivamente no ano seguinte, não compensando a complexidade de um join deslocado.
+
+---
+
+## 7. Explorando sensibilidade
+
+```r
+absolute_gap_cases <- prodes_clean %>%
+  filter(area_km2 >= 1) %>%
+  anti_join(ibama_filtered %>%
+              filter(fine_value >= 0.01) %>%
+              distinct(geocode_ibge, year),
+            by = c("geocode_ibge", "year"))
+
+recovered_gap_t1 <- absolute_gap_cases %>%
+  semi_join(
+    ibama_filtered %>%
+      filter(fine_value >= 0.01) %>%
+      transmute(geocode_ibge, year = year - 1L) %>%
+      distinct(),
+    by = c("geocode_ibge", "year")
+  )
+```
+
+`anti_join(A, B)` mantém as linhas de `A` que **não têm** nenhuma correspondência em `B` pela chave indicada — aqui, município-anos com desmatamento material (`area_km2 >= 1`) que não têm nenhum auto com multa efetiva (`fine_value >= 0.01`) no mesmo ano. Isso é literalmente a definição operacional de "gap absoluto" (`absolute_gap`).
+
+`semi_join(A, B)` é o oposto complementar: mantém as linhas de `A` que **têm** correspondência em `B`, mas retorna só as colunas de `A` (nunca duplica linhas de `A`, mesmo que `B` tenha múltiplas correspondências — ao contrário de um `inner_join`). Aqui, verifica quantos dos casos de gap absoluto teriam uma multa registrada no ano *seguinte* (`year - 1L` desloca o IBAMA para trás, o mesmo truque de deslocamento do §6, só que na direção oposta e usando `transmute()` em vez de `select()` porque aqui não precisamos manter `fine_value`, só a chave).
+
+O resultado (23,6% recuperados) é a justificativa quantitativa para o pipeline **não** implementar um join t+1 — a complexidade adicional não compensaria, já que a maioria dos casos de gap absoluto permanece gap mesmo com essa margem de tolerância de um ano.
+
+`cat()` para os três prints de resumo é simples e funcional, mas frágil: o alinhamento visual dos números depende de espaços fixos manualmente calculados — se algum dia o número de dígitos mudar (por exemplo, se `nrow()` passar de 4 para 5 dígitos), o alinhamento visual quebra (a lógica não, só a estética). Para um script de uso único isso é aceitável; numa ferramenta reutilizável, `sprintf()` ou `glue::glue()` com largura fixa seria mais robusto.
+
+---
+
+## 8. Explorando IPCA
+
+```r
+ipca_raw <- read_delim(
+  file.path(PATH_IPCA, FILE_IPCA),
+  delim = ";", skip = 3, n_max = 1,
+  col_types = cols(.default = "c"), show_col_types = FALSE
+) %>%
+  pivot_longer(-1, names_to = "month", values_to = "index") %>%
+  mutate(
+    year  = as.integer(str_extract(month, "\\d{4}$")),
+    index = as.numeric(str_replace(index, ",", "."))
+  )
+```
+
+O CSV exportado do Sidra vem com um bloco de título antes dos dados e notas de rodapé depois — `skip = 3` pula as três primeiras linhas (título/metadado), e `n_max = 1` lê exatamente uma linha de dado após o cabeçalho (a única linha que de fato contém os 216 valores mensais do índice, um por coluna, em formato largo).
+
+`pivot_longer(-1, ...)`: o `-1` significa "todas as colunas exceto a primeira" — a sintaxe de seleção negativa do tidyselect. A primeira coluna (sem nome no CSV original) é automaticamente rotulada `...1` pelo `readr` (convenção de nomeação posicional para cabeçalhos ausentes/vazios) e permanece na tabela resultante, replicada em todas as 216 linhas — não participa do pivot, mas também não é descartada. É um resíduo inofensivo, mas que poderia ser removido com um `select(-1)` ou `select(-...1)` extra, se quisesse uma tabela final mais limpa.
+
+`str_extract(month, "\\d{4}$")`: regex que captura exatamente 4 dígitos no **final** da string (`$` é a âncora de fim de string; `\\d{4}` são exatamente quatro dígitos — o duplo `\\` de novo por causa do escape de string do R antes de virar regex). Os rótulos de mês do Sidra carregam o ano embutido no final (algo como um código terminando em `202512`), e essa regex extrai só essa parte.
+
+```r
+stopifnot(
+  "ipca_raw: NAs"                 = sum(is.na(ipca_raw$index)) == 0,
+  "ipca_raw: years out range"     = all(ipca_raw$year %in% 2008:2025),
+  "ipca_raw: 12 months"           = all(count(ipca_raw, year)$n == 12),
+  "ipca_raw: 216 lines"           = nrow(ipca_raw) == NROW_IPCA_RAW,
+  "ipca_raw: 18 years"            = n_distinct(ipca_raw$year) == 18
+)
+```
+
+Cinco checagens, cada uma isolando um modo de falha diferente (nulos / intervalo de anos válido / exatamente 12 meses por ano / contagem total de linhas / número de anos distintos). É uma boa prática de design de teste: em vez de uma única condição composta e difícil de diagnosticar, cada assertiva é estreita o suficiente para que a mensagem de erro, sozinha, já diga o que especificamente quebrou.
+
+---
+
+## 9. Deflator IPCA e painel EGS em R (incorporado na v4.4)
+
+As seções 9 e 10 cobrem o bloco incorporado na v4.4 (antes rascunhado como `exploring_script_additions_proposal.R`): a reconstrução em R do deflator e do EGS unificado, e a base empírica das quatro decisões do redesign do ranking (2026-07-20). É a contraparte R do que `03_analytics.sql` faz em produção — os números daqui são os citados em `final_reference.md` §§4–5 e no "Registro empírico" do `sql_technical_fixes.md`. Nota de estilo: o bloco veio do merge com indentação de dois espaços a mais que o resto do arquivo — resíduo cosmético da incorporação, sem efeito sobre a execução.
+
+### 9.1 ipca_deflator
+
+```r
+ipca_deflator <- ipca_raw %>%
+  group_by(year) %>%
+  summarise(avg_index = mean(index), .groups = "drop") %>%
+  mutate(deflator = avg_index[year == 2025] / avg_index) %>%
+  select(year, deflator)
+```
+
+`summarise()` colapsa as 216 linhas mensais em 18 anuais; `.groups = "drop"` remove o agrupamento residual (sem isso o dplyr emite um aviso e a tibble resultante continua agrupada — inofensivo aqui, mas o argumento explícito documenta a intenção). O detalhe que vale entender é `avg_index[year == 2025]` dentro do `mutate()`: nesse contexto, `avg_index` e `year` são as colunas inteiras da tabela, então a indexação lógica extrai o único valor de 2025 e o R o recicla contra o vetor completo — o equivalente exato da subquery escalar não correlacionada de `03_analytics.sql` (§3.2 do `sql_explained.md`). Mesma operação, dois idiomas.
+
+### 9.2 egs_panel — o EGS unificado em R
+
+```r
+egs_panel <- prodes_clean %>%
+  left_join(
+    ibama_filtered %>%
+      group_by(geocode_ibge, year) %>%
+      summarise(
+        n_infractions       = n(),
+        fine_values_nominal = sum(fine_value, na.rm = TRUE),
+        .groups = "drop"
+      ),
+    by = c("geocode_ibge", "year")
+  ) %>%
+  mutate(
+    n_infractions       = coalesce(n_infractions, 0L),
+    fine_values_nominal = coalesce(fine_values_nominal, 0)
+  ) %>%
+  left_join(ipca_deflator, by = "year") %>%
+  mutate(
+    fine_values = fine_values_nominal * deflator,
+    gap_type = case_when(
+      area_km2    < 1    ~ "no_pressure",
+      fine_values < 0.01 ~ "absolute_gap",
+      TRUE               ~ "measured_gap"
+    ),
+    denom_raw = sqrt(log10(1 + n_infractions) * log10(1 + fine_values)),
+    egs       = if_else(area_km2 < 1, 0,
+                        log10(1 + area_km2) / pmax(1, denom_raw))
+  )
+```
+
+Quatro mecânicas:
+
+**Agregar antes do join.** O IBAMA é agregado a município-ano *antes* do `left_join` — em SQL, o `GROUP BY` de `egs_base` roda *depois* do `LEFT JOIN`. Os dois caminhos dão o mesmo resultado; em R, agregar primeiro evita a duplicação temporária de linhas do painel (uma por auto), que é como o SQL trabalha internamente antes de agrupar.
+
+**`coalesce(n_infractions, 0L)`.** O `0L` é literal de *inteiro* (não double) — mantém a coluna inteira, espelhando o `COUNT()` do SQL; `coalesce()` é o `COALESCE`, transformando os NAs do left join (município-ano sem auto) em zero explícito. É o que faz o gap absoluto existir como observação em vez de sumir da tabela — a mesma peça central explicada para `egs_base` no guia SQL.
+
+**`log10()`, não `log()`.** Base 10 explícita, espelhando o `LOG()` do DuckDB — é a opção (b) do Fix S6 implementada: quando o EGS é recalculado em R, a base é declarada em vez de deixada no default natural do `log()`, e os valores ficam comparáveis número a número com o SQL, não só em ordenação.
+
+**`pmax(1, denom_raw)`.** `pmax()` é o máximo *paralelo* (elemento a elemento, vetorizado) — o equivalente do `GREATEST` do SQL. `max()` do R base colapsaria o vetor inteiro num único escalar, um erro clássico nesse contexto. `if_else()` (dplyr) em vez de `ifelse()` (base): estrito quanto a tipo — os dois ramos precisam retornar o mesmo tipo, transformando em erro imediato o que no `ifelse()` seria coerção silenciosa.
+
+O `stopifnot()` na sequência confere cinco pontos (contagem do painel, três contagens de classificação, ausência de NA no EGS) e reutiliza `NROW_PRODES_RAW` e `N_ABSOLUTE_GAP` com o mesmo significado de antes — ver §3.
+
+## 10. Base empírica do redesign do ranking (Decisões 1–4)
+
+### 10.1 Decisão 1 — piso do denominador: com que frequência ativa?
+
+```r
+egs_panel %>%
+  filter(gap_type == "measured_gap") %>%
+  summarise(
+    n_floor_active = sum(denom_raw < 1),
+    min    = min(denom_raw),
+    p25    = quantile(denom_raw, .25),
+    median = median(denom_raw),
+    max    = max(denom_raw)
+  )
+```
+
+`sum(vetor_lógico)` conta os `TRUE` — a mesma coerção lógico→numérico do `mean()` de §6, aqui como contagem em vez de proporção. O resultado (piso ativo em 28 de 3.285 anos de `measured_gap`, 0,9%; mínimo do denominador bruto 0,796) é a base empírica da decisão (b) do cabeçalho de `03_analytics.sql`, monitorada em produção pelo check `n_floor_active = 28`. O comentário registra que com valores nominais seriam 61 casos (corrigido na terceira auditoria, 2026-07-20 — este guia dizia 62, o número do protótipo; o script e o check de produção `n_floor_active_nominal` fixam 61) — a própria deflação tira quase metade dos casos da zona instável. O `stopifnot` fixa `N_FLOOR_ACTIVE`.
+
+### 10.2 Decisão 2 — sensibilidade do limiar de materialidade
+
+```r
+rank_by_threshold <- function(panel, threshold) {
+  panel %>%
+    mutate(egs_t = if_else(area_km2 < threshold, 0,
+                           log10(1 + area_km2) / pmax(1, denom_raw))) %>%
+    group_by(geocode_ibge) %>%
+    summarise(avg_egs = mean(egs_t), .groups = "drop") %>%
+    mutate(rank = min_rank(desc(avg_egs)))
+}
+
+overlap_top_n <- function(a, b, n) {
+  length(intersect(
+    a %>% slice_min(rank, n = n, with_ties = FALSE) %>% pull(geocode_ibge),
+    b %>% slice_min(rank, n = n, with_ties = FALSE) %>% pull(geocode_ibge)
+  ))
+}
+```
+
+A função parametriza o limiar e recomputa o ranking completo — chamada três vezes (1 km², 6,25 ha, nenhum). `min_rank(desc(x))` ranqueia decrescente dando a empates o mesmo rank (o menor); `slice_min(rank, n = n, with_ties = FALSE)` corta um top-N determinístico mesmo com empates — o mesmo problema de empate que o Fix S16.1 resolve no SQL com o desempate por geocode. `map_int()` (usado na tibble de overlaps) é a variante *tipada* do `map()`: falha alto se o retorno não for inteiro, em vez de devolver uma lista ambígua. O resultado — top 10/20/50 idênticos nos três limiares, Spearman 0,985 via `cor(method = "spearman")` — é o que transforma o limiar de suposição em resultado de robustez.
+
+Cuidado com dois números parecidos que medem coisas diferentes: `N_RECLASS_MATERIALITY = 3291` conta as linhas com `0,0625 <= area < 1` (reclassificadas entre os limiares *testados*), enquanto o "Registro empírico" do `sql_technical_fixes.md` cita 3.392 para `0 < area < 1` (o custo de remover o limiar por completo). Recortes diferentes do mesmo intervalo, não uma inconsistência.
+
+### 10.3 Decisão 3 — média 0-fill como ordenação principal
+
+```r
+muni_ranking <- egs_panel %>%
+  group_by(geocode_ibge, mun) %>%
+  summarise(
+    avg_egs_18y     = mean(egs),
+    n_years_pressure = sum(gap_type != "no_pressure"),
+    total_area_km2  = sum(area_km2),
+    n_infractions   = sum(n_infractions),
+    total_fines     = sum(fine_values),
+    .groups = "drop"
+  ) %>%
+  mutate(frac_pressure = n_years_pressure / n_distinct(egs_panel$year))
+
+muni_qualified <- muni_ranking %>%
+  filter(n_years_pressure > 0) %>%
+  mutate(avg_egs_pressure_years = avg_egs_18y / frac_pressure)
+```
+
+Detalhe fino de escopo: `n_distinct(egs_panel$year)` dentro do `mutate()` referencia o *objeto global* `egs_panel` (com `$`), não os dados que fluem pelo pipe — deliberado (os 18 anos do painel inteiro, o denominador correto para todo município), mas fácil de ler errado como se fosse por grupo.
+
+`muni_qualified` verifica a identidade algébrica do 0-fill *invertendo-a* (`avg_egs_pressure_years = avg_egs_18y / frac_pressure`) e conferindo no `stopifnot` com `isTRUE(all.equal(...))` — a mesma técnica de comparação tolerante a ponto flutuante de §4.6, aplicada à identidade que o check `identity_mismatches` monitora em produção no SQL. O mesmo bloco fixa `N_MUNI_WITH_PRESSURE = 552`. As correlações que fecham a seção (`cor()` Pearson 0,621 / Spearman 0,696 entre severidade e frequência) são os números citados na adoção da média 0-fill; o caso divergente documentado é Nova Nazaré (MT), severidade bruta 1,384 com 2/18 anos de pressão.
+
+### 10.4 Decisão 4 — situação atual: média recente e slope OLS
+
+```r
+muni_current <- egs_panel %>%
+  group_by(geocode_ibge, mun) %>%
+  summarise(
+    avg_egs_3y = mean(egs[year >= 2023]),
+    slope_egs  = cov(year, egs) / var(year),   # OLS slope, full 18-year panel
+    .groups = "drop"
+  )
+
+final_table <- muni_ranking %>%
+  left_join(muni_current, by = c("geocode_ibge", "mun")) %>%
+  arrange(desc(avg_egs_18y))
+```
+
+`egs[year >= 2023]` dentro do `summarise()` agrupado: `egs` e `year` são os vetores *do grupo*, então a indexação lógica restringe a média a 2023–2025 — o equivalente direto do `FILTER (WHERE e.year >= 2023)` de `03_analytics.sql`. `cov(year, egs) / var(year)` é o slope OLS pela definição; o R usa as versões amostrais (n−1) e o SQL as populacionais (`COVAR_POP`/`VAR_POP`), mas a normalização cancela na razão — mesmo número, como a decisão (f) do cabeçalho do SQL documenta. A fragilidade do slope com poucos anos não-nulos (evento único em 2024 → +0,005; eventos 2008/2017 → −0,017) é a base da regra de leitura "slope nunca sozinho, sempre com `avg_egs_3y` e `n_years_pressure`".
+
+O bloco de comentário final registra o top 3 (Cachoeira do Piriá, Porto de Moz, Aveiro) como valores de conferência contra a implementação SQL, e `slice_head(n = 15)` imprime o top 15 para leitura visual — mesmo papel dos prints soltos de §4.3.
+
+---
+
+## Pendências conhecidas deste script (registradas, não corrigidas)
+
+Registradas aqui para quem for usar este documento como checklist de manutenção futura:
+
+- Paths relativos sem tratamento de portabilidade equivalente ao `data_root` do SQL (Fix 14, pendente).
+- Inconsistência de linha em branco antes/depois de headers `####` entre seções.
+- `readr::guess_encoding()` é a única chamada com prefixo de pacote explícito no arquivo.
+- Coluna residual `...1` em `ipca_raw` (inofensiva, não utilizada downstream).
+- `cat()` com alinhamento manual no bloco de sensibilidade (frágil a mudança no número de dígitos).

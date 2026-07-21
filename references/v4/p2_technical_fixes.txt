@@ -1,0 +1,552 @@
+================================================================================
+ENFORCEMENT GAP MONITORING SYSTEM
+Technical Issues & Fixes — v5 · 2026-07-12
+Stack: DuckDB · SQL · R · Power BI | Dados: PRODES/INPE + IBAMA + IPCA/Sidra + IBGE
+================================================================================
+
+CHANGELOG v5 (2026-07-12 — municipios_ref via API IBGE, UF validada em produção)
+------------------------------------------------------------------------------
+- Fix 12 (UF/municipios_ref): ABERTO → APLICADO. Fonte mudou de DTB/xls
+  (planejado, nunca obtido — site do IBGE inacessível) para a API de
+  localidades do IBGE (JSON, baixada manualmente por Diogo via navegador).
+  Estrutura do JSON inspecionada e verificada (Python, não presumida) antes
+  de escrever o SQL: 5.571 municípios, geocodes de 7 dígitos sem duplicata,
+  27 UFs, cobertura de UF de 100% via caminho `regiao-imediata`. UF e
+  nome_municipio propagados de egs_base até ranking_gap_absoluto e
+  ranking_completo. Validado em produção: pipeline completo rodado no
+  DBeaver contra dados reais, todos os checks (n_municipios_ref=5.571,
+  geocodes_duplicados=0, geocode_ref_invalido=0, uf_ausente=0,
+  sem_referencia=0, sem_uf=0) confirmados pelo autor em 2026-07-12.
+- Fix 14 (NOVO): paths hardcoded absolutos, criados como workaround para
+  rodar no DBeaver, substituídos por `SET VARIABLE data_root` +
+  `getvariable()` — ponto único de configuração, portável entre DBeaver,
+  CLI e R, sem depender do diretório de trabalho do processo. Motivado por
+  preparação para publicação em GitHub/Zenodo.
+- Barra do Bugres (Fix 4) e quebras estruturais do PRODES seguem sem
+  alteração — não fizeram parte deste ciclo.
+
+CHANGELOG v4 (2026-07-10 — staging deflator, analytics v2, auditoria pós-v3)
+------------------------------------------------------------------------------
+- Fix 2 (val_multas sem ajuste por inflação): ABERTO → APLICADO. ipca_deflator
+  implementado em 01_staging.sql com valores reais do Sidra (não mais os
+  valores aproximados registrados na v3 deste documento).
+- Fix 3 (p75 poolado): ABERTO → FECHADO, via Solução B (não A). Como Fix 2
+  deflaciona val_multas antes do cálculo do EGS, o p75 poolado sobre valores
+  reais é metodologicamente defensável — p75 por ano não foi implementado e,
+  por ora, não é necessário.
+- Fix 10 (NOVO): priority_score = 0 quando streak = 1 — resolvido, mas por
+  mecanismo diferente do proposto na v3 (filtro de persistência, não LOG(streak+1)).
+- Fix 11 (NOVO): classificação tipo_egs ambígua entre v3 §4.4 (limite 1 km²)
+  e v3 §4.7 (limite >0 km²) — resolvida a favor do limite de materialidade (1 km²).
+- Fix 12 (NOVO, ABERTO): UF removida de ibama_clean sem substituto —
+  regressão em relação à v3, não uma pendência antiga. Bloqueia o choropleth
+  do Power BI (Bloco 6 do p2_next_steps.md).
+- Fix 13 (NOVO): sem_pressao passou de egs=0 (v3) para egs=NULL (pipeline atual)
+  sem registro em changelog anterior — documentado retroativamente aqui.
+- Fix 4, 5, 6: sem alteração de status (ABERTO / MVP FUTURO). Fix 4 (Barra do
+  Bugres) segue sem verificação externa — nenhuma menção nos arquivos SQL/R
+  atualizados de 2026-07-10.
+
+SUMÁRIO
+-------
+Fix 1   Floating-point contamination na classificação tipo_egs       [APLICADO]  Alta
+Fix 2   val_multas sem ajuste por inflação — viés direcional no EGS  [APLICADO]  Média
+Fix 3   Threshold p75 poolado — mistura escalas nominais entre anos  [FECHADO]   Média
+Fix 4   Desmatamento autorizado não excluído (PRODES ≠ ilegal)       [ABERTO]    Baixa
+Fix 5   Enforcement estadual ausente — somente autos federais IBAMA  [ABERTO]    Baixa
+Fix 6   Extensão biomas: geocode join quebra fora da Amazônia Legal  [MVP FUTURO] Alta
+Fix 7   Same-year join — lag temporal entre PRODES e IBAMA           [FECHADO]   Média
+Fix 8   Coluna de data errada — DT_FATO_INFRACIONAL com 69% de NULLs [APLICADO]  CRÍTICA
+Fix 9   Filtro IBAMA: 1 caso → 3 casos (cobertura 2008–2012)         [APLICADO]  Média
+Fix 10  priority_score = 0 quando max_streak = 1                     [APLICADO]  Média
+Fix 11  tipo_egs: limite de materialidade ambíguo (>0 vs >=1 km²)    [APLICADO]  Baixa
+Fix 12  UF removida de ibama_clean sem substituto (municipios_ref)   [APLICADO]  Alta
+Fix 13  sem_pressao: egs 0 → NULL, mudança não documentada           [APLICADO]  Baixa
+Fix 14  Paths hardcoded — portabilidade GitHub/Zenodo                [APLICADO]  Média
+
+
+================================================================================
+FIX 1 — APLICADO | Severidade: ALTA
+Floating-point contamination na classificação tipo_egs
+================================================================================
+
+PROBLEMA
+A condição original para classificar uma observação como 'completo' era:
+
+    WHEN (LOG(1 + n_autos) * LOG(1 + val_multas)) > 0 THEN 'completo'
+
+Matematicamente o produto é zero se e somente se n_autos = 0 ou val_multas = 0.
+Porém floating-point IEEE 754 pode produzir resultados como 2.220446e-16 ao
+operar com zeros, fazendo com que observações com enforcement nulo passassem
+erroneamente para a categoria 'completo'. O impacto seria silencioso: EGS
+calculado sobre denominador virtualmente zero, produzindo valores artificialmente
+altos e contaminando rankings.
+
+SOLUÇÃO APLICADA (histórica — ver Fix 11 para a versão atual da classificação)
+    CASE
+        WHEN n_autos > 0 AND val_multas >= 0.01
+            THEN LOG(1 + area_km2) / SQRT(LOG(1 + n_autos) * LOG(1 + val_multas))
+        WHEN area_km2 > 0
+            THEN LOG(1 + area_km2)
+        ELSE 0
+    END AS egs
+
+A condição explícita val_multas >= 0.01 elimina ambiguidade semântica e imuniza
+contra floating-point. Esse threshold permanece em uso no pipeline atual
+(03_analytics.sql); o que mudou desde então é o limite de área que separa
+gap_absoluto de sem_pressao (Fix 11) e o valor de egs para sem_pressao (Fix 13).
+
+RESULTADO PÓS-FIX (histórico, pipeline v3 — ver nota abaixo)
+Fix 1 em si não alterou a distribuição — caráter preventivo confirmado.
+Os números abaixo refletem o pipeline v3 (Fix 1 + Fix 8 + Fix 9, sem deflator
+e sem materialidade em gap_absoluto — ver Fix 11):
+
+    completo     =  7.893   (54.5%)
+    gap_absoluto =  3.784   (26.1%)
+    sem_pressao  =  2.813   (19.4%)
+    TOTAL        = 14.490
+    p75 EGS      =  0.5891
+
+> NOTA v5 (confirmado em produção, 2026-07-12): com Fix 11 (materialidade
+> >=1 km² também em gap_absoluto) e Fix 2 (deflator) aplicados, a
+> distribuição muda para:
+>     completo     =  3.285   (22.7%)
+>     gap_absoluto =  3.063   (21.1%)  -- bate com o checkpoint R (N_GAP_ABSOLUTO)
+>     sem_pressao  =  8.142   (56.2%)
+>     TOTAL        = 14.490
+>     p75 EGS      =  0.7027106414917799
+> A queda de completo (54.5%→22.7%) e o salto de sem_pressao (19.4%→56.2%)
+> vêm do threshold de materialidade (Fix 11: area_km2 >0 → >=1), não de
+> mudança na metodologia de enforcement. Números confirmados pelo autor via
+> execução real do pipeline no DBeaver, não recalculados nesta sessão.
+
+
+================================================================================
+FIX 2 — APLICADO | Severidade: MÉDIA
+val_multas sem ajuste por inflação — viés direcional no EGS
+================================================================================
+
+PROBLEMA
+O painel cobre 18 anos (2008–2025). val_multas está em reais nominais.
+Sem deflacionamento, o denominador do EGS subestima sistematicamente a
+intensidade de enforcement nos anos mais antigos → EGS inflado para anos
+anteriores. Ver análise original de viés (mantida por referência):
+
+  Direção            Monotônico — anos mais antigos sempre têm EGS artificialmente alto
+  Magnitude          Cresce com o horizonte temporal
+  Mitigante          Rankings cross-seccionais dentro do mesmo ano são preservados
+  Componente exposto Threshold p75 poolado (ver Fix 3)
+
+SOLUÇÃO APLICADA (2026-07-10 — substitui a proposta v3 com valores aproximados)
+
+    -- 1. ipca_deflator: valores reais do IBGE/Sidra t.1737 v.2266,
+    --    Brasil, jan/2008-dez/2025, download 2026-07-10 (01_staging.sql)
+    --    Base 2025 = média dos índices mensais do ano (lavraturas se
+    --    distribuem pelo ano; pico set-out). Formato largo do Sidra
+    --    tratado via UNPIVOT + regex contra vazamento de rodapé.
+    CREATE OR REPLACE TABLE project2.staging.ipca_deflator AS
+    WITH wide AS (
+        SELECT * FROM read_csv(
+            'data_ipca/sidra_1737_v2266_ipca_indice_200801_202512_2026_07_10.csv',
+            delim = ';', skip = 3, header = true,
+            all_varchar = true, null_padding = true, ignore_errors = true,
+            parallel = false)
+    ),
+    long AS (
+        UNPIVOT wide ON COLUMNS('\d{4}$') INTO NAME mes VALUE indice
+    ),
+    anual AS (
+        SELECT CAST(regexp_extract(mes, '(\d{4})$', 1) AS INTEGER) AS ano,
+               AVG(CAST(REPLACE(indice, ',', '.') AS DOUBLE))      AS indice_medio
+        FROM long
+        WHERE regexp_matches(indice, '^\d+(,\d+)?$')
+        GROUP BY ano
+    )
+    SELECT ano,
+           (SELECT indice_medio FROM anual WHERE ano = 2025) / indice_medio AS deflator
+    FROM anual
+    ORDER BY ano;
+
+    -- 2. egs_base: val_multas_nominal preservado + val_multas deflacionado
+    --    (03_analytics.sql) — deflator é por ano, multiplicar o agregado
+    --    anual é equivalente a deflacionar cada auto individualmente
+    COALESCE(SUM(i.val_multa), 0)                AS val_multas_nominal,
+    COALESCE(SUM(i.val_multa), 0) * d.deflator   AS val_multas
+
+    -- egs_final e p75 usam val_multas (deflacionado), não val_multas_nominal
+
+TRADE-OFF / PENDÊNCIA RESIDUAL
+val_multas_nominal é mantido na tabela egs_base para fins de auditoria — não
+usado em nenhum cálculo downstream. Nenhuma pendência conhecida neste fix;
+municipios_ref (Fix 12) é independente e não bloqueia este.
+
+INCONSISTÊNCIA A CORRIGIR NO PRÓPRIO ARQUIVO
+O cabeçalho de 03_analytics.sql ainda lista este fix como "PENDENTE (Fix 2/3):
+deflacionar val_multa..." — comentário desatualizado; o corpo do arquivo já
+aplica a deflação. Corrigir o comentário na próxima revisão do SQL.
+
+
+================================================================================
+FIX 3 — FECHADO | Severidade: MÉDIA
+Threshold p75 poolado — mistura escalas nominais entre anos
+================================================================================
+
+PROBLEMA ORIGINAL
+O p75 poolado (calculado sobre todos os anos juntos) era calibrado numa
+mistura de escalas nominais, permitindo que municípios de anos antigos
+(val_multa nominal baixo em termos reais) ultrapassassem o limiar mais
+facilmente que municípios equivalentes em anos recentes.
+
+RESOLUÇÃO — Solução B, não Solução A
+A v3 deste documento propunha duas soluções: (A) p75 calculado por ano,
+ou (B) resolver via deflação (Fix 2), tornando o p75 poolado defensável.
+Fix 2 foi aplicado — val_multas usado no cálculo do EGS já está em reais
+de 2025. Solução A (p75 por ano) não foi implementada e não é necessária
+enquanto o EGS for calculado sobre valores deflacionados.
+
+MUDANÇA ADICIONAL — p75 hardcoded → dinâmico
+Independente deste fix, o p75 deixou de ser um valor fixo (0.727, citado
+na v3 da session reference) e passou a ser calculado dinamicamente via CTE
+em cada execução de 03_analytics.sql:
+
+    WITH p75 AS (
+        SELECT PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY egs) AS p75_egs
+        FROM project2.analytics.egs_final
+        WHERE tipo_egs = 'completo'
+    )
+
+Isso elimina o risco de drift documentado na v3 (§ "p75 hardcoded vs. dinâmico")
+— o valor sempre reflete a distribuição atual dos dados. O valor numérico do
+p75 sob o pipeline atual (materialidade + deflator) ainda não está registrado
+neste documento — rodar o check "p75 de referência" em 03_analytics.sql antes
+de citar em narrativa.
+
+STATUS: reavaliar se p75 por ano (Solução A) se torna necessário caso o
+pipeline volte a usar valores nominais em algum momento.
+
+
+================================================================================
+FIX 4 — ABERTO | Severidade: BAIXA
+Desmatamento autorizado não excluído (PRODES ≠ ilegal)
+================================================================================
+
+PROBLEMA
+PRODES mede perda de cobertura florestal detectada por satélite — não confirma
+ilegalidade. Uma fração do area_km2 pode corresponder a supressão autorizada via
+ASV ou Reserva Legal computada no CAR.
+
+Caso específico: Barra do Bugres (MT) — identificado (v3) como candidato a alta
+proporção de desmatamento legal via AUTEX/DOF. NENHUMA verificação externa foi
+feita entre a v3 (2026-05-07) e o pipeline atual (2026-07-10) — não há menção
+a Barra do Bugres em nenhum arquivo SQL ou R atualizado. Classificação
+gap_absoluto é metodologicamente correta (PRODES detecta, IBAMA não lavra),
+mas a interpretação muda de impunidade para autorização caso confirmado.
+
+SOLUÇÃO PROPOSTA — cruzamento com SICAR/CAR (inalterada desde v3)
+    CREATE TABLE project2.staging.asv_municipio AS
+    SELECT
+        geocode_ibge,
+        YEAR(data_autorizacao) AS ano,
+        SUM(area_autorizada_ha) / 100.0 AS area_autorizada_km2
+    FROM sicar.autorizacoes_supressao
+    GROUP BY geocode_ibge, YEAR(data_autorizacao);
+
+Nota de dados: SICAR agregado por município-ano não está disponível em série
+histórica consistente. Para o MVP, o caveat de interpretação no documento de
+resultados é o tratamento adequado — mas o caveat ainda não foi verificado.
+
+
+================================================================================
+FIX 5 — ABERTO | Severidade: BAIXA
+Enforcement estadual ausente — somente autos federais (IBAMA)
+================================================================================
+
+PROBLEMA
+O dataset IBAMA captura apenas infrações administrativas federais. Secretarias
+estaduais (SEMAS-PA, IDESAM-AM, SEMA-MT, etc.) também emitem autos de infração.
+Um município classificado como gap_absoluto pode ter enforcement estadual não
+registrado no dataset. O viés é conservador (subestima enforcement).
+
+  Disponibilidade    SEMAS-PA e MAPA disponibilizam dados parcialmente; sem API nacional
+  Efeito no ranking  Conservador — EGS real ≤ EGS calculado para municípios com est. ativo
+  Estados expostos   Pará (SEMAS), Mato Grosso (SEMA-MT), Rondônia (SEDAM)
+  Tratamento MVP     Documentar caveat; enquadrar como 'enforcement federal mínimo'
+
+Sem alteração desde v3.
+
+
+================================================================================
+FIX 6 — MVP FUTURO | Severidade: ALTA
+Extensão biomas: spatial join para Cerrado / Caatinga / Mata Atlântica
+================================================================================
+
+Sem alteração desde v3 — ver texto completo na versão anterior deste documento.
+Resumo: join tabular por geocode não se sustenta fora da Amazônia Legal;
+solução proposta é spatial join via NUM_LATITUDE_AUTO/NUM_LONGITUDE_AUTO do
+IBAMA contra polígonos de bioma (IBGE Biomas 2019), com normalização
+intra-bioma (percentil) antes do cálculo do EGS. Não iniciado.
+
+
+================================================================================
+FIX 7 — FECHADO | Severidade: MÉDIA
+Same-year join — lag temporal entre PRODES e IBAMA
+================================================================================
+
+Sem alteração de status desde v3. Confirmado novamente no exploring_script.R
+v4 (2026-07-10): só_t = 4.7% | só_t1 = 1.0% | ambos = 59.2% | nenhum = 35.1%
+(n=60.707, materialidade area>=1) — números diferem ligeiramente da análise
+v3 (pct_match_t=68.8% etc., base n=58.051, sem materialidade) porque a base
+mudou (3 casos, Fix 9) e o critério de match passou a exigir area>=1. Direção
+da conclusão é a mesma: same-year join mantido.
+
+
+================================================================================
+FIX 8 — APLICADO | Severidade: CRÍTICA
+Coluna de data errada — DT_FATO_INFRACIONAL com 69% de NULLs
+================================================================================
+
+Sem alteração desde v3 — ver texto completo na versão anterior deste documento.
+DAT_HORA_AUTO_INFRACAO permanece a coluna de data usada em 02_marts.sql,
+0% de NULLs, confirmado em exploring_script.R v4 (NA_IBAMA_DATES = 0).
+
+
+================================================================================
+FIX 9 — APLICADO | Severidade: MÉDIA
+Filtro IBAMA: 1 caso → 3 casos (cobertura 2008–2012)
+================================================================================
+
+Sem alteração desde v3. Filtro de 3 casos confirmado idêntico entre
+exploring_script.R v4 (CODIGOS_DESMATAMENTO, mesmos 6 códigos) e
+02_marts.sql (mesma condição, "Filtro v3 (3 casos; espelha exploring_script.R,
+locked)"). 60.707 registros — número estável desde v3.
+
+
+================================================================================
+FIX 10 — APLICADO | Severidade: MÉDIA (NOVO em v4)
+priority_score = 0 quando max_streak = 1
+================================================================================
+
+PROBLEMA (sinalizado na v3 da session reference, nunca registrado aqui)
+priority_score = LOG(max_streak) * LOG(1 + total_desmatado_km2). Quando
+max_streak = 1, LOG(1) = 0, zerando o score independente do volume de
+desmatamento — um município com streak=1 e 500 km² desmatados desapareceria
+silenciosamente do ranking.
+
+SOLUÇÃO APLICADA (03_analytics.sql, 2026-07-10)
+Não foi a correção proposta na v3 (LOG(streak+1)). Em vez disso, o filtro de
+persistência roda ANTES da agregação que calcula priority_score:
+
+    -- streaks CTE não filtra por streak_length
+    SELECT geocode_ibge, mun, ano - rn AS streak_group,
+           COUNT(*) AS streak_length, ...
+    FROM qualifying
+    GROUP BY geocode_ibge, mun, ano - rn
+
+    -- filtro aplicado ANTES do MAX()/priority_score, não depois
+    SELECT geocode_ibge, mun,
+           MAX(streak_length) AS max_streak,
+           ...
+           ROUND(LOG(MAX(streak_length)) * LOG(1 + SUM(area_no_streak)), 3) AS priority_score
+    FROM streaks
+    WHERE streak_length >= 3
+    GROUP BY geocode_ibge, mun
+
+Como só streaks com streak_length >= 3 entram na agregação, MAX(streak_length)
+nunca é 1 — LOG(1)=0 nunca ocorre em priority_score. Comentário no SQL trata
+isso como decisão de design: "streak 1-2 não é zerado pelo LOG, é excluído por
+regra de persistência (1 ciclo eleitoral + margem). Design, não bug."
+
+TRADE-OFF
+Resolve o bug de forma diferente da sugerida na v3. Não há mais necessidade de
+LOG(streak+1) porque municípios com streak 1-2 já são excluídos do ranking por
+regra de negócio (persistência mínima de 3 anos) antes de chegar ao cálculo do
+score — mas isso significa que municípios com streak=1-2 e área expressiva
+continuam invisíveis nos rankings de persistência, só que por exclusão
+deliberada em vez de por artefato aritmético. Se a intenção for capturar esses
+casos, é necessário um ranking separado (sem filtro de persistência) — não
+implementado.
+
+
+================================================================================
+FIX 11 — APLICADO | Severidade: BAIXA (NOVO em v4)
+tipo_egs: limite de materialidade ambíguo (>0 vs >=1 km²)
+================================================================================
+
+PROBLEMA
+A v3 da session reference era internamente inconsistente: §4.4 documentava
+"Threshold area_km2 >= 1: limite de detecção do PRODES" como decisão locked,
+mas a tabela de classificação em §4.7 usava area_km2 > 0 para diferenciar
+gap_absoluto de sem_pressao — sem aplicar o limite de 1 km² mencionado em §4.4.
+
+SOLUÇÃO APLICADA (03_analytics.sql, 2026-07-10)
+Classificação agora aplica >=1 km² consistentemente:
+
+    CASE
+        WHEN area_km2 < 1          THEN 'sem_pressao'
+        WHEN val_multas < 0.01     THEN 'gap_absoluto'
+        ELSE                            'completo'
+    END AS tipo_egs
+
+Documentado explicitamente no cabeçalho do arquivo como decisão (a)
+MATERIALIDADE: "área >= 1 km² em classificação e rankings — ordem de grandeza
+acima da área mínima de mapeamento do PRODES (6,25 ha), elimina desmatamento
+residual sem relevância de priorização."
+
+IMPACTO
+gap_absoluto sob o critério antigo (>0 km², pipeline v3) = 3.784.
+gap_absoluto sob o critério atual (>=1 km², pipeline v4) = 3.063 (checkpoint
+cruzado R/SQL, ver exploring_script.R N_GAP_ABSOLUTO e comentário em
+03_analytics.sql). Diferença de 721 município-anos que tinham entre 0 e 1 km²
+desmatados sem enforcement — agora corretamente tratados como sem_pressao
+material em vez de gap de enforcement.
+
+
+================================================================================
+FIX 12 — APLICADO | Severidade: ALTA
+UF removida de ibama_clean sem substituto (municipios_ref)
+================================================================================
+
+PROBLEMA (histórico — ver SOLUÇÃO para o estado atual)
+A v3 de ibama_clean (02_marts.sql) selecionava UF AS uf diretamente do IBAMA
+raw — solução provisória e sabidamente incompleta (não cobre gap_absoluto sem
+registro em ibama_clean; risco de homônimos entre UFs, ex. Pau D'Arco PA vs
+TO). Na v4 (2026-07-10), essa coluna tinha sido removida sem que
+municipios_ref existisse ainda — regressão temporária, sem UF em nenhuma
+tabela do pipeline.
+
+TENTATIVA 1 (2026-07-12, abandonada) — DTB/IBGE via .csv
+Plano original: baixar RELATORIO_DTB_BRASIL_2025_MUNICIPIOS (site do IBGE,
+formato .xls/.ods), converter para CSV, carregar com nomes de coluna
+presumidos ("Código Município Completo", "Nome_Município", "UF"). Abandonado
+porque (a) o site do DTB ficou inacessível para o autor, e (b) os nomes de
+coluna presumidos nunca foram verificados contra o arquivo real — risco
+identificado e descartado antes de aplicar.
+
+SOLUÇÃO APLICADA (2026-07-12) — API de localidades do IBGE via JSON
+Fonte trocada para servicodados.ibge.gov.br/api/v1/localidades/municipios,
+baixada manualmente pelo autor via navegador (a API não respondeu a fetch
+automatizado). Estrutura do JSON inspecionada com Python antes de escrever
+qualquer SQL — não presumida:
+    - 5.571 municípios, ids de 7 dígitos, sem duplicata
+    - 27 UFs
+    - caminho microrregiao.mesorregiao.UF.sigla: falha em 1 registro
+      (Boa Esperança do Norte/MT, sem microrregiao cadastrada)
+    - caminho "regiao-imediata"."regiao-intermediaria".UF.sigla: 0 falhas
+      — usado no SQL final por cobertura completa
+
+    -- 01_staging.sql
+    CREATE OR REPLACE TABLE project2.staging.municipios_ref AS
+    SELECT
+        CAST(id AS VARCHAR)                                AS geocode_ibge,
+        nome                                                AS nome_municipio,
+        "regiao-imediata"."regiao-intermediaria".UF.sigla   AS uf
+    FROM read_json_auto(getvariable('data_root') || '/data_ibge/municipios.json');
+
+    -- 03_analytics.sql — join em egs_base, propagado até os rankings
+    LEFT JOIN project2.staging.municipios_ref r ON p.geocode_ibge = r.geocode_ibge
+
+VALIDAÇÃO EM PRODUÇÃO (2026-07-12)
+Pipeline completo (01→04) rodado pelo autor no DBeaver contra os dados reais
+do projeto. Checks confirmados pelo autor, não apenas verificados no arquivo:
+    n_municipios_ref     = 5.571  (esperado: 5.571)
+    geocodes_duplicados  = 0
+    geocode_ref_invalido = 0
+    uf_ausente           = 0
+    sem_referencia       = 0      (PRODES × municipios_ref)
+    sem_uf                = 0      (egs_final)
+
+IMPACTO
+- 04_export.sql agora materializa uf e nome_municipio em todos os 4 parquets.
+- Bloco 6 do p2_next_steps.md (Power BI, choropleth) deixa de estar bloqueado
+  por este item.
+- `mun` (PRODES, 5 homônimos) permanece na tabela para referência histórica,
+  mas nome_municipio (municipios_ref) é a fonte recomendada para exibição.
+
+
+================================================================================
+FIX 13 — APLICADO | Severidade: BAIXA (NOVO em v4)
+sem_pressao: egs 0 → NULL, mudança não documentada
+================================================================================
+
+PROBLEMA
+Na v3 (§4.7), sem_pressao tinha egs = 0 (mesma escala numérica que completo e
+gap_absoluto). No pipeline atual, sem_pressao tem egs = NULL:
+
+    CASE
+        WHEN area_km2 >= 1 AND val_multas >= 0.01
+            THEN LOG(1 + area_km2) / SQRT(LOG(1 + n_autos) * LOG(1 + val_multas))
+        WHEN area_km2 >= 1
+            THEN LOG(1 + area_km2)
+        ELSE NULL   -- sem pressão material
+    END AS egs
+
+Essa mudança não aparece em nenhum changelog da session reference nem deste
+documento até agora — foi descoberta por auditoria de código, não por registro
+do autor.
+
+AVALIAÇÃO
+Mudança faz sentido semanticamente: egs=0 sugeria "pressão mínima mas presente
+e bem respondida", quando na verdade sem_pressao significa "não há pressão
+material para avaliar" — categorias diferentes que não deveriam compartilhar
+um valor numérico comparável (ex. AVG(egs) por ano incluindo sem_pressao=0
+sub-estimaria o EGS médio real de forma enganosa). NULL é semanticamente mais
+correto e evita esse viés em agregações. resumo_anual (04_export.sql) já
+explora isso corretamente: avg_egs_completo usa CASE WHEN tipo_egs='completo'
+THEN egs END, que ignora sem_pressao de qualquer forma — então o impacto
+prático da mudança é pequeno, mas deveria ter sido registrado quando feita.
+
+AÇÃO
+Nenhuma correção de código necessária. Ação é apenas documental: registrar a
+mudança (feito neste fix) e adicionar entrada correspondente na próxima
+atualização da session reference (feito na v4, ver mudança em §4.7).
+
+
+================================================================================
+FIX 14 — APLICADO | Severidade: MÉDIA (NOVO em v5)
+Paths hardcoded — portabilidade GitHub/Zenodo
+================================================================================
+
+PROBLEMA
+Ao rodar o pipeline pela primeira vez no DBeaver (2026-07-12), os 4
+read_csv/read_json_auto de 01_staging.sql falharam com "No files found" —
+os paths relativos ("data_prodes/...") são resolvidos contra o diretório de
+trabalho do processo, que no DBeaver não é a raiz do projeto. Solução
+imediata do autor: hardcode de path absoluto pessoal
+(C:/Users/diogo/projects/project2/...) direto nos 4 lugares. Funciona
+localmente, mas não é publicável — quebra para qualquer outra máquina,
+incluindo o próprio autor em outro computador, e expõe estrutura de pastas
+pessoal no código versionado.
+
+SOLUÇÃO APLICADA
+Ponto único de configuração via variável de sessão do DuckDB (SET VARIABLE /
+getvariable, recurso nativo, documentado em duckdb.org/docs/current/sql/
+statements/set_variable), no topo de 01_staging.sql:
+
+    SET VARIABLE data_root = 'C:/Users/diogo/projects/project2';  -- editar
+
+    CREATE OR REPLACE TABLE project2.staging.prodes_raw AS
+    SELECT * FROM read_csv(
+        getvariable('data_root') || '/data_prodes/terrabrasilis_legal_amazon_*.csv',
+        ...);
+
+Funciona igual em DBeaver, CLI do DuckDB e R (pacote duckdb/DBI) — não
+depende do diretório de trabalho de nenhum cliente. Quem clonar o repositório
+edita uma linha, não os 4 lugares onde os arquivos são lidos.
+
+RECOMENDAÇÃO PENDENTE (não aplicada — decisão do autor)
+Para GitHub/Zenodo: não versionar as pastas de dados brutos (data_prodes/,
+data_ibama/, data_ibge/, data_ipca/) — grandes e de download manual.
+.gitignore nelas, documentar fonte/instrução de download no README (já
+existem como comentário em cada tabela do 01_staging.sql, só precisam ser
+consolidados lá).
+
+
+================================================================================
+P2 — Enforcement Gap Monitoring System · Fixes técnicos v5 · 2026-07-12
+Fixes 1, 7, 8, 9 sem alteração de conteúdo desde v3 (2026-05-04). Fixes 2, 3
+fechados na v4. Fix 12 fechado nesta versão, com validação em produção
+confirmada pelo autor (não apenas revisão de código). Fix 14 novo, motivado
+pela preparação do repositório para publicação. Barra do Bugres (Fix 4) e
+quebras estruturais do PRODES seguem como os únicos itens abertos de maior
+relevância — nenhum dos dois fez parte deste ciclo de trabalho.
+================================================================================

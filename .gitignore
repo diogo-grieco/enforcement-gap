@@ -4,5 +4,8 @@
 .Ruserdata
 data_ibama/
 data_prodes/
+data_ibge/
+output/
 project2.duckdb
-.duckdb.exe
+duckdb.exe
+*.wal

@@ -1,15 +1,40 @@
 ----------------------------------------------------------
 -- Enforcement Gap Monitoring System
--- 01_staging.sql — ingestão de dados brutos
+-- 01_staging.sql — raw data ingestion
 --
 -- Author:  Diogo Grieco
--- Updated: v2.2-2026-07-10 (fixes IPCA: parallel=false; filtro de
---          formato numérico contra vazamento do rodapé do Sidra)
+-- Updated: v5-2026-07-20 (layer purity pass — ipca_deflator,
+--          municipality_ref, and municipality_area used to compute/
+--          type/filter inside this file, contradicting this file's
+--          own stated purpose ("no analytical transformation").
+--          Split into raw ingestion here (ipca_raw,
+--          municipality_ref_raw, municipality_area_raw — SELECT *,
+--          all_varchar, zero filtering) + typing/filtering in
+--          02_marts.sql (municipality_ref, municipality_area,
+--          ipca_annual) + the deflator ratio itself, a derived index,
+--          moved to 03_analytics.sql. See sql_technical_fixes.md.
+--          Previously v4-2026-07-20 — added municipality_area (still
+--          mixed staging/typing at the time); v3-2026-07-15 —
+--          translated to English + gap_type rename, Fix 16 in
+--          p2_technical_fixes.txt.)
 --
--- Purpose: ingerir arquivos raw no DuckDB sem transformação
---          analítica (tudo VARCHAR; tipagem no marts).
--- Nota:    caminhos relativos à raiz do projeto (project2/).
+-- Purpose: ingest raw files into DuckDB with no analytical
+--          transformation (everything VARCHAR for the CSV sources;
+--          the JSON source keeps read_json_auto's inferred types,
+--          untouched — typing/standardization happens in marts).
+--          Every table in this file is SELECT * with no WHERE
+--          clause (all_varchar = true on every CSV read) — if you find
+--          a CAST, a WHERE, or a computed column below, it doesn't
+--          belong in this file.
+--
+-- CONFIGURATION — edit this line to your local project clone
+-- path before running. Single configuration point for the
+-- pipeline; getvariable() resolves the same way in DBeaver,
+-- CLI, or R, without depending on the process's working
+-- directory.
 ----------------------------------------------------------
+
+SET VARIABLE data_root = 'C:/Users/diogo/projects/project2';
 
 CREATE SCHEMA IF NOT EXISTS project2.staging;
 CREATE SCHEMA IF NOT EXISTS project2.marts;
@@ -17,114 +42,136 @@ CREATE SCHEMA IF NOT EXISTS project2.analytics;
 
 ----------------------------------------------------------
 -- prodes_raw
--- Fonte: INPE/TerraBrasilis (download manual)
--- Granularidade: município-ano | Esperado: 14.490 x 5
+-- Source: INPE/TerraBrasilis (manual download)
+-- Granularity: municipality-year | Expected: 14,490 x 5
 ----------------------------------------------------------
 
 CREATE OR REPLACE TABLE project2.staging.prodes_raw AS
 SELECT * FROM read_csv(
-    'data_prodes/terrabrasilis_legal_amazon_*.csv',
+    getvariable('data_root') || '/data_prodes/terrabrasilis_legal_amazon_*.csv',
     delim = ';',
     header = true,
-    all_varchar = true    -- tipagem determinística no marts (espelha o R)
+    all_varchar = true    -- deterministic typing happens in marts (mirrors R)
 );
 
 ----------------------------------------------------------
 -- ibama_raw
--- Fonte: IBAMA dados abertos (download manual, 1 csv/ano)
--- Granularidade: auto de infração | Esperado: 309.116 x 84
+-- Source: IBAMA open data (manual download, 1 csv/year)
+-- Granularity: infraction notice | Expected: 309,116 x 84
 ----------------------------------------------------------
 
 CREATE OR REPLACE TABLE project2.staging.ibama_raw AS
 SELECT * FROM read_csv(
-    'data_ibama/auto_infracao_ano_*.csv',
+    getvariable('data_root') || '/data_ibama/auto_infracao_ano_*.csv',
     delim = ';',
     header = true,
     all_varchar = true
 );
 
 ----------------------------------------------------------
--- ipca_deflator
--- Fonte: IBGE/Sidra t.1737 v.2266 (número-índice, dez/93=100),
---        Brasil, jan/2008-dez/2025, download 2026-07-10
--- DECISÃO: base 2025 = média dos índices mensais do ano
---          (lavraturas distribuem-se pelo ano; pico set-out)
--- Formato largo do Sidra: UNPIVOT seleciona colunas-mês por
--- regex; NULLs (rodapé de notas) descartados pelo UNPIVOT
--- Esperado: 18 linhas | deflator(2025) = 1.0 | deflator(2008) ~ 2.6
+-- ipca_raw
+-- Source: IBGE/Sidra t.1737 v.2266 (index number, dec/93=100),
+--         Brazil, jan/2008-dec/2025, downloaded 2026-07-10
+-- Wide format, one column per month, everything text. No UNPIVOT,
+-- no cast, no filtering here — that's marts.ipca_annual. The reader
+-- options below (skip, null_padding, ignore_errors, parallel=false)
+-- are file-parsing mechanics, not analytical decisions: they exist
+-- because Sidra's export has a multi-line title, a footer with a
+-- line break inside quotes, and legend rows that would otherwise
+-- break the CSV scanner — same category as all_varchar above, not
+-- a judgment call about the data's meaning.
 ----------------------------------------------------------
 
-CREATE OR REPLACE TABLE project2.staging.ipca_deflator AS
-WITH wide AS (
-    SELECT * FROM read_csv(
-        'data_ipca/sidra_1737_v2266_ipca_indice_200801_202512_2026_07_10.csv',
-        delim = ';', skip = 3, header = true,
-        all_varchar = true, null_padding = true, ignore_errors = true,
-        -- rodapé do Sidra tem quebra de linha entre aspas: o scanner
-        -- paralelo não suporta isso com null_padding (DuckDB >= 1.5)
-        parallel = false)
-),
-long AS (
-    UNPIVOT wide ON COLUMNS('\d{4}$') INTO NAME mes VALUE indice
-),
-anual AS (
-    SELECT CAST(regexp_extract(mes, '(\d{4})$', 1) AS INTEGER) AS ano,
-           AVG(CAST(REPLACE(indice, ',', '.') AS DOUBLE))      AS indice_medio
-    FROM long
-    -- rodapé de legenda do Sidra vaza strings para colunas-mês via
-    -- null_padding; só valores com formato de índice ('2746,37...') entram
-    WHERE regexp_matches(indice, '^\d+(,\d+)?$')
-    GROUP BY ano
+CREATE OR REPLACE TABLE project2.staging.ipca_raw AS
+SELECT * FROM read_csv(
+    getvariable('data_root') || '/data_ipca/sidra_1737_v2266_ipca_indice_200801_202512_2026_07_10.csv',
+    delim = ';', skip = 3, header = true,
+    all_varchar = true, null_padding = true, ignore_errors = true,
+    parallel = false
+);
+
+----------------------------------------------------------
+-- municipality_ref_raw
+-- Source: IBGE localities API (servicodados.ibge.gov.br/
+-- api/v1/localidades/municipios), downloaded manually via
+-- browser on 2026-07-12 (the DTB/xls site was unreachable).
+-- Save the JSON as data_ibge/municipios.json.
+-- Raw nested structure, no field extraction — that's
+-- marts.municipality_ref. read_json_auto infers the nested STRUCT
+-- types (microrregiao.mesorregiao.UF.sigla,
+-- "regiao-imediata"."regiao-intermediaria".UF.sigla, etc.) without
+-- picking a path; the decision of which path to standardize on is a
+-- typing/selection call, not raw ingestion.
+-- Expected: 5,571 rows (verified 2026-07-12 against the real file).
+----------------------------------------------------------
+
+CREATE OR REPLACE TABLE project2.staging.municipality_ref_raw AS
+SELECT * FROM read_json_auto(getvariable('data_root') || '/data_ibge/municipios.json');
+
+----------------------------------------------------------
+-- municipality_area_raw
+-- Source: IBGE, Malha Municipal Digital — Áreas Territoriais
+-- (https://www.ibge.gov.br/geociencias/organizacao-do-territorio/
+-- estrutura-territorial/15761-areas-dos-municipios.html), file
+-- AR_BR_RG_UF_RGINT_RGI_MUN_2025.xls, downloaded 2026-07-20.
+--
+-- DECISION: the source is a legacy binary .xls. Rather than add an
+-- unverified DuckDB extension dependency (GDAL/xlsx reader) for a
+-- static reference table, convert it once (Excel, LibreOffice, or an
+-- online converter — Diogo used an online converter, confirmed
+-- working) and read it exactly like every other source in this
+-- pipeline. Save as data_ibge/municipality_area_2025.csv before
+-- running this block.
+--
+-- VERIFY BEFORE RUNNING: delim below is ',' — confirmed against the
+-- actual converted file (2026-07-20). If you regenerate this CSV with
+-- a different tool (e.g. Excel/LibreOffice "Save As", which tends to
+-- follow the Brazilian ';' convention of every other CSV in this
+-- project), open it once and check before trusting the row count.
+--
+-- No CAST, no WHERE here — the 2 trailing garbage rows (one blank,
+-- one an OBS footnote) are still present in this raw table; dropping
+-- them is a filtering decision, done in marts.municipality_area.
+-- Expected: 5,575 rows (5,573 municipalities + 2 garbage rows).
+----------------------------------------------------------
+
+CREATE OR REPLACE TABLE project2.staging.municipality_area_raw AS
+SELECT * FROM read_csv(
+    getvariable('data_root') || '/data_ibge/municipality_area_2025.csv',
+    delim = ',',
+    header = true,
+    all_varchar = true
+);
+
+----------------------------------------------------------
+-- == STAGING CHECKS ==
+-- Only checks that don't require typed/extracted/computed fields —
+-- everything downstream of a CAST, a WHERE, or a UNPIVOT belongs in
+-- 02_marts.sql's checks instead.
+----------------------------------------------------------
+
+WITH checks AS (
+    SELECT 'n_prodes' AS check_name, CAST(COUNT(*) AS VARCHAR) AS actual, '14490' AS expected FROM project2.staging.prodes_raw
+    UNION ALL SELECT 'n_ibama', CAST(COUNT(*) AS VARCHAR), '309116' FROM project2.staging.ibama_raw
+    UNION ALL SELECT 'n_prodes_columns', CAST(COUNT(*) AS VARCHAR), '5' FROM information_schema.columns WHERE table_catalog='project2' AND table_schema='staging' AND table_name='prodes_raw'
+    UNION ALL SELECT 'n_ibama_columns', CAST(COUNT(*) AS VARCHAR), '84' FROM information_schema.columns WHERE table_catalog='project2' AND table_schema='staging' AND table_name='ibama_raw'
+    -- invalid_geocode_ibama note (Fix S17): expected is 29, not 0.
+    -- IS NULL is required in addition to LENGTH(...) != 7 — DuckDB's
+    -- LENGTH(NULL) evaluates to NULL, not a number, so a plain "!= 7"
+    -- alone silently passes NULL geocodes through the WHERE clause.
+    -- 23 rows are COD_MUNICIPIO = '431173' (Manoel Viana, RS — malformed
+    -- 6-digit code; the correct IBGE code is 4311759, verified against
+    -- municipios.json. Corruption mechanism unknown — NOT a leading-zero
+    -- drop: no IBGE code starts with 0; UF prefixes run 11-53.)
+    -- 6 rows have COD_MUNICIPIO IS NULL (garbage rows). Neither group
+    -- affects egs_final (RS is outside the Legal Amazon; the NULL rows
+    -- fail the ibama_clean status filter anyway) — documented, not
+    -- corrected. See sql_technical_fixes.md.
+    UNION ALL SELECT 'invalid_geocode_ibama', CAST(COUNT(*) AS VARCHAR), '29' FROM project2.staging.ibama_raw WHERE COD_MUNICIPIO IS NULL OR LENGTH(COD_MUNICIPIO) != 7
+    UNION ALL SELECT 'n_municipality_ref_raw', CAST(COUNT(*) AS VARCHAR), '5571' FROM project2.staging.municipality_ref_raw
+    UNION ALL SELECT 'n_municipality_area_raw', CAST(COUNT(*) AS VARCHAR), '5575' FROM project2.staging.municipality_area_raw
 )
-SELECT ano,
-       (SELECT indice_medio FROM anual WHERE ano = 2025) / indice_medio AS deflator
-FROM anual
-ORDER BY ano;
-
-----------------------------------------------------------
--- municipios_ref
--- PENDENTE: requer data_ibge/dtb_municipios.csv (DTB/IBGE,
--- download manual; ~5.570 linhas). Ajustar nomes de coluna
--- ao arquivo real antes de rodar.
--- Fonte de verdade para nome/UF em todas as categorias,
--- incluindo gap_absoluto (sem registro em ibama_clean).
-----------------------------------------------------------
-
--- CREATE OR REPLACE TABLE project2.staging.municipios_ref AS
--- SELECT
---     CAST(codigo_municipio_completo AS VARCHAR) AS geocode_ibge,
---     nome_municipio,
---     sigla_uf AS uf
--- FROM read_csv('data_ibge/dtb_municipios.csv',
---               header = true, all_varchar = true);
-
-----------------------------------------------------------
--- == CHECKS staging ==
-----------------------------------------------------------
-
--- Contagens brutas (esperado: 14.490 | 309.116)
-SELECT (SELECT COUNT(*) FROM project2.staging.prodes_raw) AS n_prodes,
-       (SELECT COUNT(*) FROM project2.staging.ibama_raw)  AS n_ibama;
-
--- ipca_deflator cobre 2008-2025 (esperado: 0)
-SELECT COUNT(*) AS anos_faltando
-FROM (SELECT UNNEST(RANGE(2008, 2026)) AS ano) anos
-LEFT JOIN project2.staging.ipca_deflator d USING (ano)
-WHERE d.ano IS NULL;
-
--- deflator válido (esperado: 0)
-SELECT COUNT(*) AS deflator_invalido
-FROM project2.staging.ipca_deflator
-WHERE deflator IS NULL OR deflator <= 0;
-
--- geocodes IBAMA com tamanho != 7 (esperado: 0, senão documentar)
-SELECT COUNT(*) AS geocode_invalido
-FROM project2.staging.ibama_raw
-WHERE LENGTH(CAST(COD_MUNICIPIO AS VARCHAR)) != 7;
-
--- PENDENTE (após municipios_ref): PRODES sem referência (esperado: 0)
--- SELECT COUNT(*) AS sem_referencia
--- FROM project2.staging.prodes_raw p
--- LEFT JOIN project2.staging.municipios_ref r
---   ON p.geocode_ibge = r.geocode_ibge
--- WHERE r.geocode_ibge IS NULL;
+SELECT check_name, actual, expected,
+       CASE WHEN actual = expected THEN 'OK' ELSE 'failed' END AS status
+FROM checks
+ORDER BY status DESC, check_name;   -- 'failed' > 'OK' na colação binária: falhas no topo
