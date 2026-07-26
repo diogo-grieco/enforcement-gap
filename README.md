@@ -162,6 +162,12 @@ Dados brutos (`data/data_prodes/`, `data/data_ibama_public/`, `data/data_ibge/`,
 
 ---
 
+## Licenças e citação
+
+O código-fonte (`pipeline/`, `viz/`, `exploration/`) está sob licença **MIT** — ver [`LICENSE`](LICENSE). Os dados derivados, parquets, visualizações e os três relatórios em `deliverables/` estão sob **Creative Commons Attribution 4.0 (CC BY 4.0)** — ver [`LICENSE-DATA.md`](LICENSE-DATA.md). Para citar este trabalho, ver [`CITATION.cff`](CITATION.cff).
+
+---
+
 ## Documentação do projeto
 
 - `deliverables/EGMS_01_resumo_executivo.docx` — síntese de 2 a 3 páginas.

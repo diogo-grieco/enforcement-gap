@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "Se usar este software, dado ou relatório, cite-o conforme abaixo."
+title: "EGMS: Enforcement Gap Monitoring System"
+abstract: >-
+  Pipeline DuckDB + SQL + R que cruza desmatamento (PRODES/INPE) com fiscalização
+  ambiental federal (IBAMA) na Amazônia Legal, produzindo o Enforcement Gap Score
+  (EGS) — um índice município-ano do desequilíbrio entre pressão de desmatamento
+  e resposta institucional federal — e um ranking municipal consolidado.
+type: software
+authors:
+  - family-names: "Grieco"
+    given-names: "Diogo"
+    orcid: "https://orcid.org/0009-0009-7859-0331"
+version: 1.0.0
+date-released: 2026-07-26
+url: "https://github.com/diogo-grieco/enforcement-gap"
+repository-code: "https://github.com/diogo-grieco/enforcement-gap"
+license: MIT
+keywords:
+  - desmatamento
+  - Amazônia Legal
+  - fiscalização ambiental
+  - PRODES
+  - IBAMA
+  - DuckDB
+  - política ambiental
