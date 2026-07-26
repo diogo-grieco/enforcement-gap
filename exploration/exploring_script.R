@@ -3,20 +3,11 @@
 # Exploration Script
 # IBAMA, PRODES & IPCA raw data
 #
-# Author:  Diogo Grieco
-# Updated: v4.4-2026-07-20 (merged the redesign-validation additions --
-#          formerly drafted as exploring_script_additions_proposal.R --
-#          into this file: egs_panel (unified EGS with denominator
-#          floor), ranking-design decisions 1-4 with their stopifnot()
-#          checkpoints, and the corresponding integrity constants.
-#          Previously v4.3-2026-07-15.)
-# R version: 4.5.0 (2025-04-11 ucrt)
-# RStudio version: 2026.07.0
+# Author: Diogo Grieco
 #
 # Purpose: Validate raw data quality, document analytical decisions (date
 #          column choice, join lag, filter logic), produce inputs for the
-#          DuckDB pipeline, and record the empirical basis of the v5
-#          ranking redesign (decisions 1-4, end of file).
+#          DuckDB pipeline, and record the empirical basis of analytical design.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -29,36 +20,33 @@ library(tidyverse)
 #### Setting paths and files
 # -----------------------------------------------------------------------------
 
-PATH_IBAMA    <- "data_ibama"
+PATH_IBAMA    <- "data/data_ibama"
 PATTERN_IBAMA <- "auto_infracao_ano_.*\\.csv"
-PATH_PRODES   <- "data_prodes"
+PATH_PRODES   <- "data/data_prodes"
 FILE_PRODES   <- "terrabrasilis_legal_amazon_25_04_2026_1777126839450.csv"
-PATH_IPCA     <- "data_ipca"
+PATH_IPCA     <- "data/data_ipca"
 FILE_IPCA     <- "sidra_1737_v2266_ipca_indice_200801_202512_2026_07_10.csv"
 
 # -----------------------------------------------------------------------------
 #### Data integrity checkpoints
 # -----------------------------------------------------------------------------
 
-NROW_IBAMA_RAW       <- 309116
-NCOL_IBAMA_RAW       <- 84
-NROW_IBAMA_FILTERED  <- 60707
-TOTAL_IBAMA_FINES    <- 26814492927
-NA_IBAMA_DATES       <- 0
-NROW_PRODES_RAW      <- 14490
-NCOL_PRODES_RAW      <- 5
-N_ABSOLUTE_GAP       <- 3063
-N_RECOVERED_GAP_T1   <- 724
-NROW_IPCA_RAW        <- 216
-NROW_IBAMA_LAG_BASE  <- 17642  
-N_IBAMA_LAG_NEGATIVE <- 355    
-NROW_IBAMA_LAG       <- 17287  
-
+NROW_IBAMA_RAW         <- 309116
+NCOL_IBAMA_RAW         <- 84
+NROW_IBAMA_FILTERED    <- 60707
+TOTAL_IBAMA_FINES      <- 26814492927
+NA_IBAMA_DATES         <- 0
+NROW_PRODES_RAW        <- 14490
+NCOL_PRODES_RAW        <- 5
+N_ABSOLUTE_GAP         <- 3063
+N_RECOVERED_GAP_T1     <- 724
+NROW_IPCA_RAW          <- 216
+NROW_IBAMA_LAG_BASE    <- 17642  
+N_IBAMA_LAG_NEGATIVE   <- 355    
+NROW_IBAMA_LAG         <- 17287  
 N_NO_PRESSURE          <- 8142   # area_km2 < 1 (56.2% of panel)
 N_MEASURED_GAP         <- 3285   # complements N_ABSOLUTE_GAP (3,063)
 N_FLOOR_ACTIVE         <- 28     # measured_gap years where raw denominator < 1
-# (deflated fines; 61 with nominal — corrected 2026-07-20, prototype
-# comment said 62; production check n_floor_active_nominal confirms 61)
 N_RECLASS_MATERIALITY  <- 3291   # panel rows with 0.0625 <= area_km2 < 1
 N_MUNI_WITH_PRESSURE   <- 552    # municipalities with >= 1 pressure year
 
@@ -386,14 +374,12 @@ stopifnot(
 # Structural check against the official INPE rate, 4 anchor years:
 # 2008 +2.9% | 2012 -3.2% | 2024 -0.4% (all within ~3%); 2025 diverges
 # -8.3% to -9.3% -- likely a preliminary (unconsolidated) PRODES figure
-# for the in-progress year ("last year subject to revision", Fix S9).
-# (Corrected 2026-07-20: this comment previously claimed "diff. <5%"
-# for all four anchors, which the 2025 anchor does not meet.)
+# for the in-progress year ("last year subject to revision").
 #   2008: 12,911 official vs 13,289 here | 2012: ~4,571 vs 4,427
 #   2024: 6,288 vs 6,263 | 2025: 5,731-5,796 vs 5,258
 # Median drop 2008->2009 (2.31 -> 0.87) coincides with CMN Resolution
 # 3,545/2008 (rural credit restriction on embargoed areas), not with a
-# change in INPE's sensor/methodology. Closed 2026-07-12 (Fix 15).
+# change in INPE's sensor/methodology.
 # -----------------------------------------------------------------------------
 
 glimpse(prodes_clean)
@@ -470,7 +456,7 @@ intersect(ibama_codes, prodes_codes) %>%
 #
 # Result (n = 60,707; materiality area >= 1):
 #   only_t = 4.7% | only_t1 = 1.0% | both = 59.2% | neither = 35.1%
-#   Same-year join confirmed. Confirmed 2026-07-10.
+#   Same-year join confirmed.
 #
 # pct_neither inflated by 2,128 geocodes outside Amazon
 # =============================================================================
@@ -510,7 +496,6 @@ lag_check %>%
 # deforestation?
 # Result (materiality area >= 1; response = fine_value >= 0.01):
 #   absolute_gap = 3,063 (21.1% of 14,490) | recovered = 724 | 23.6%
-#   Confirmed 2026-07-10.
 # =============================================================================
 
 absolute_gap_cases <- prodes_clean %>%
@@ -626,13 +611,11 @@ ipca_deflator <- ipca_raw %>%
   # Result (deflated fines): floor binds in 28/3,285 measured_gap years (0.9%);
   # raw denominator in measured_gap: min = 0.796 | p25 = 1.55 | median = 2.06 |
   # max = 4.56. The floor is inert for the mass of the data and only clips the
-  # R$0.01-boundary instability cases (fix S10). With nominal fines it binds
-  # 61 times (corrected 2026-07-20; the prototype comment said 62 — never
-  # asserted, now fixed by the SQL check n_floor_active_nominal = 61) —
-  # deflation itself moves half the cases out of the unstable
-  # zone. Confirmed 2026-07-20.
+  # R$0.01-boundary instability cases. With nominal fines it binds 61 times
+  # (SQL check n_floor_active_nominal = 61) — deflation itself moves half the
+  # cases out of the unstable zone.
   # -----------------------------------------------------------------------------
-  
+
   egs_panel %>%
     filter(gap_type == "measured_gap") %>%
     summarise(
@@ -642,16 +625,13 @@ ipca_deflator <- ipca_raw %>%
       median = median(denom_raw),
       max    = max(denom_raw)
     )
-  
+
   stopifnot(
     "floor: unexpected active count" =
       egs_panel %>%
       filter(gap_type == "measured_gap", denom_raw < 1) %>%
       nrow() == N_FLOOR_ACTIVE
   )
-
-
-
 
 
   # -----------------------------------------------------------------------------
@@ -662,7 +642,7 @@ ipca_deflator <- ipca_raw %>%
   # top 10/20/50 and Spearman = 0.985 across all 805 municipalities — although
   # 3,291 rows (22.7%) are reclassified between thresholds. The threshold
   # affects the descriptive statistic (56.2% no_pressure), not the ranking.
-  # Citable as a robustness result. Confirmed 2026-07-20.
+  # Citable as a robustness result.
   # -----------------------------------------------------------------------------
   
   rank_by_threshold <- function(panel, threshold) {
@@ -718,7 +698,6 @@ ipca_deflator <- ipca_raw %>%
     #   EDITORIAL DECISION, kept: a persistent-gap monitoring system demotes
     #   point events; documented as the worked example of the metric's limits
     #   (same register as the Barra do Bugres case).
-    #   Confirmed 2026-07-20.
     # -----------------------------------------------------------------------------
   
   muni_ranking <- egs_panel %>%
@@ -763,7 +742,7 @@ ipca_deflator <- ipca_raw %>%
   # decimal place. Both columns kept BUT read alongside n_years_pressure as a
   # reliability indicator; recent mean (2023-2025) is the legible companion.
   # NOTE: window includes 2025 — last panel year subject to revision (PRODES
-  # estimate not consolidated at download date). Confirmed 2026-07-20.
+  # estimate not consolidated at download date).
   # -----------------------------------------------------------------------------
   
   muni_current <- egs_panel %>%
@@ -782,6 +761,6 @@ ipca_deflator <- ipca_raw %>%
   #   Cachoeira do Piria (PA): avg18 = 1.179 | avg3y = 1.228 | slope = -0.010
   #   Porto de Moz (PA):       avg18 = 1.175 | avg3y = 0.930 | slope = -0.014
   #   Aveiro (PA):             avg18 = 1.109 | avg3y = 1.508 | slope = +0.042
-  #   (top 15 entirely 18/18 pressure years; see egms_tabela_final_prototipo.csv)
+  #   (top 15 entirely 18/18 pressure years)
   
   final_table %>% slice_head(n = 15)

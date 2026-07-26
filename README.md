@@ -9,9 +9,9 @@ Autor: Diogo Grieco.
 ## Stack
 
 - **DuckDB** — motor de consulta / armazenamento (`project2.duckdb`)
-- **SQL** — pipeline em 4 arquivos (`01_staging.sql` → `04_export.sql`), v5 (2026-07-20)
-- **R (tidyverse)** — exploração e validação dos dados brutos (`exploring_script.R`)
-- **Power BI** — dashboard (consome os parquets gerados por `04_export.sql`)
+- **SQL** — pipeline em 4 arquivos (`pipeline/01_staging.sql` → `pipeline/04_export.sql`)
+- **R (tidyverse)** — validação paralela dos dados brutos (`exploration/`) e suíte de visualização (`viz/`)
+- **Power BI** — dashboard opcional (consome os parquets gerados por `04_export.sql`)
 
 O pipeline roda igualmente via DBeaver, DuckDB CLI, ou o pacote `duckdb`/`DBI` em R — nenhuma etapa depende do diretório de trabalho do cliente (ver "Configuração" abaixo).
 
@@ -22,33 +22,41 @@ O pipeline roda igualmente via DBeaver, DuckDB CLI, ou o pacote `duckdb`/`DBI` e
 ```
 project2/
 ├── README.md                  (cópia deste arquivo na raiz do repo)
-├── sql/
+├── pipeline/
 │   ├── 01_staging.sql
 │   ├── 02_marts.sql
 │   ├── 03_analytics.sql
-│   ├── 04_export.sql
-│   └── sql_explained.md
-├── exploration/
-│   ├── exploring_script.R
-│   └── exploring_script_explained.txt
-├── references/                (documentação por versão; v6 = atual)
-├── project2.duckdb            (gerado ao rodar o pipeline)
-├── data_prodes/               (dados brutos — não versionado)
-│   └── terrabrasilis_legal_amazon_*.csv
-├── data_ibama/                (dados brutos — não versionado)
-│   └── auto_infracao_ano_*.csv
-├── data_ibge/                 (dados brutos — não versionado)
-│   ├── municipios.json
-│   └── municipality_area_2025.csv
-├── data_ipca/                 (versionado — snapshot de reprodutibilidade)
-│   └── sidra_1737_v2266_ipca_indice_200801_202512_2026_07_10.csv
-└── output/                    (gerado por 04_export.sql — não versionado)
-    ├── pbi_egs_final.parquet
-    ├── pbi_egs_ranking.parquet
-    └── pbi_annual_summary.parquet
+│   └── 04_export.sql
+├── exploration/                (validação paralela em R, roda direto sobre os CSVs brutos)
+│   └── exploring_script.R
+├── viz/                         (suíte de visualização — ver viz/README.md)
+│   ├── 00_setup.R, 00_build_mesh.R, 01_maps.R … 07_offender_network.R
+│   └── README.md
+├── deliverables/
+│   ├── EGMS_01_resumo_executivo.docx
+│   ├── EGMS_02_writing_sample.docx
+│   └── EGMS_03_relatorio_estendido.docx
+├── project2.duckdb              (gerado ao rodar o pipeline, não versionado)
+├── data/
+│   ├── data_prodes/
+│   │   └── terrabrasilis_legal_amazon_*.csv
+│   ├── data_ibama_public/       (13 de 84 colunas; CPF/CNPJ pseudonimizado — ver README na pasta)
+│   │   └── auto_infracao_ano_*.csv
+│   ├── data_ibge/
+│   │   ├── municipios.json
+│   │   ├── municipality_area_2025.csv
+│   │   └── malha_772_amazonia_legal_simplificada.geojson   (gerado por viz/00_build_mesh.R)
+│   └── data_ipca/
+│       └── sidra_1737_v2266_ipca_indice_200801_202512_2026_07_10.csv
+└── output/
+    ├── parquets/                (gerado por 04_export.sql)
+    │   ├── egs_final.parquet
+    │   ├── egs_ranking.parquet
+    │   └── annual_summary.parquet
+    └── visualizations/          (PNG/GIF gerados pela suíte viz/)
 ```
 
-As pastas `data_*/` e `output/` **não são versionadas** (ver `.gitignore` abaixo) — são grandes, de download manual, e regeneráveis a partir das fontes primárias. Exceção deliberada: o CSV do IPCA (`data_ipca/`) é pequeno e estável e **está versionado**, como parte do snapshot de reprodutibilidade (decisão da auditoria de 2026-07-20).
+`data/`, os parquets finais em `output/parquets/`, `output/visualizations/` e `deliverables/` **são versionados** — é o que torna o repositório reprodutível a partir de um clone limpo e legível diretamente no GitHub, sem depender de um download externo. `data/data_ibama_public/` é uma versão derivada do dado bruto do IBAMA sem identificação do autuado (ver seção "Dados do IBAMA e privacidade" abaixo); o CSV original com nome/CPF/CNPJ nunca é versionado. A malha antes da simplificação, caches intermediários (`output/parquets/viz_*.parquet`) e o banco `project2.duckdb` não são versionados — são grandes e regenerados por um rerun local.
 
 ---
 
@@ -56,13 +64,19 @@ As pastas `data_*/` e `output/` **não são versionadas** (ver `.gitignore` abai
 
 | Pasta | Fonte | Onde baixar |
 |---|---|---|
-| `data_prodes/` | PRODES/INPE, desmatamento anual por município na Amazônia Legal | [TerraBrasilis](https://terrabrasilis.dpi.inpe.br/) — exportar CSV agregado por município-ano |
-| `data_ibama/` | IBAMA, autos de infração ambiental (um CSV por ano) | [dadosabertos.ibama.gov.br](https://dadosabertos.ibama.gov.br/) — dataset "Fiscalização - auto de infração" |
-| `data_ibge/` (referência) | IBGE, referência de município/UF | API de localidades: `https://servicodados.ibge.gov.br/api/v1/localidades/municipios` — baixar o JSON via navegador e salvar como `municipios.json` |
-| `data_ibge/` (áreas) | IBGE, Malha Municipal Digital — Áreas Territoriais 2025 | [ibge.gov.br → áreas dos municípios](https://www.ibge.gov.br/geociencias/organizacao-do-territorio/estrutura-territorial/15761-areas-dos-municipios.html), arquivo `AR_BR_RG_UF_RGINT_RGI_MUN_2025.xls`. **Converter uma vez para CSV** (`municipality_area_2025.csv`); o `01_staging.sql` espera `delim = ','` — se converter com Excel/LibreOffice (que tende a usar `;`), ajustar o delim no `read_csv` correspondente |
-| `data_ipca/` | IBGE/Sidra, índice IPCA mensal (deflator) | [Sidra, tabela 1737, variável 2266](https://sidra.ibge.gov.br/tabela/1737) — série Brasil, formato CSV largo (mês × ano) |
+| `data/data_prodes/` | PRODES/INPE, desmatamento anual por município na Amazônia Legal | [TerraBrasilis](https://terrabrasilis.dpi.inpe.br/) — exportar CSV agregado por município-ano |
+| `data/data_ibama_public/` | IBAMA, autos de infração ambiental (um CSV por ano, versão derivada sem identificação do autuado) | Derivado de [dadosabertos.ibama.gov.br](https://dadosabertos.ibama.gov.br/), dataset "Fiscalização - auto de infração"; script de derivação em `data/data_ibama_public/README.md` |
+| `data/data_ibge/` (referência) | IBGE, referência de município/UF | API de localidades: `https://servicodados.ibge.gov.br/api/v1/localidades/municipios` — baixar o JSON via navegador e salvar como `municipios.json` |
+| `data/data_ibge/` (áreas) | IBGE, Malha Municipal Digital — Áreas Territoriais 2025 | [ibge.gov.br → áreas dos municípios](https://www.ibge.gov.br/geociencias/organizacao-do-territorio/estrutura-territorial/15761-areas-dos-municipios.html), arquivo `AR_BR_RG_UF_RGINT_RGI_MUN_2025.xls`. Converter uma vez para CSV (`municipality_area_2025.csv`); o `01_staging.sql` espera `delim = ','` — se converter com Excel/LibreOffice (que tende a usar `;`), ajustar o delim no `read_csv` correspondente |
+| `data/data_ipca/` | IBGE/Sidra, índice IPCA mensal (deflator) | [Sidra, tabela 1737, variável 2266](https://sidra.ibge.gov.br/tabela/1737) — série Brasil, formato CSV largo (mês × ano) |
 
 Os nomes de arquivo esperados por `01_staging.sql` usam wildcard (`*`) para PRODES e IBAMA — múltiplos CSVs na mesma pasta são concatenados automaticamente. IPCA, JSON do IBGE e CSV de áreas têm nome exato esperado (ver caminho completo no próprio `01_staging.sql`).
+
+---
+
+## Dados do IBAMA e privacidade
+
+Os autos de infração do IBAMA, como publicados, trazem nome e CPF/CNPJ do autuado. Como este repositório é público, `data/data_ibama_public/` mantém apenas as 13 das 84 colunas brutas efetivamente usadas em algum ponto do pipeline ou da suíte `viz/` (município, datas, valor da multa, tipo e código da infração, status, embargo/apreensão). `NOME_INFRATOR` é descartado (nunca é lido em nenhum script). `CPF_CNPJ_INFRATOR` é substituído por um **identificador substituto aleatório e estável** (`pid_` + 16 dígitos hexadecimais sorteados, um por autuado): o mesmo autuado recebe sempre o mesmo `pid_`, então toda contagem que depende de identidade (curva de Lorenz, rede de infratores multi-município) é idêntica ao dado original. O mapa `CPF/CNPJ → pid_` é gerado uma única vez, mantido apenas localmente e **nunca versionado**; como o substituto é aleatório (não derivado do próprio CPF/CNPJ), a identidade real não é recuperável a partir do dado publicado — por construção, e não por ofuscação. O CSV original com nome/CPF/CNPJ nunca é versionado neste repositório.
 
 ---
 
@@ -80,7 +94,7 @@ Todos os `read_csv`/`read_json_auto` do pipeline usam `getvariable('data_root') 
 
 ## Como rodar
 
-1. Baixe os 5 conjuntos de dados brutos (ver tabela acima) para as pastas `data_*/` correspondentes.
+1. Um clone do repositório já contém todos os dados brutos versionados em `data/` — nenhum download é necessário para reproduzir os resultados publicados. Para atualizar com dados mais recentes, baixe os 5 conjuntos (ver tabela acima) para as pastas `data_*/` correspondentes.
 2. Edite `data_root` no topo de `01_staging.sql` para o caminho local do seu clone.
 3. Rode os arquivos SQL em ordem, validando o bloco de checks ao final de cada um antes de seguir:
    ```
@@ -90,23 +104,23 @@ Todos os `read_csv`/`read_json_auto` do pipeline usam `getvariable('data_root') 
    03_analytics.sql  → índices derivados: deflator IPCA, EGS unificado (fórmula única
                         com piso no denominador), egs_ranking (média 0-fill 18 anos,
                         média 3 anos, slope, pct_desmatado), annual_summary
-   04_export.sql     → materializa 3 parquets em output/ para o Power BI
+   04_export.sql     → materializa 3 parquets em output/parquets/
    ```
    No DBeaver: abrir o script, associar à conexão do `project2.duckdb`, `Execute SQL Script` (Alt+X) roda o arquivo inteiro, incluindo o bloco `== CHECKS ==` ao final.
-4. Confira os checks: cada arquivo termina em **uma única query consolidada** que retorna `check_name | actual | expected | status` (7 checks em staging, 26 em marts, 20 em analytics, 1 em export — 54 no total; o check `ipca_months_not_12` entrou em 2026-07-20, Fix S14; a auditoria de 2026-07-20 adicionou 3 checks de `prodes_clean` e o `n_floor_active_nominal`; a terceira auditoria de 2026-07-20 adicionou `total_area_prodes_clean`, `deflator_2008` e o check pós-export de parquet stale. Falhas aparecem no topo do grid). Qualquer linha com `status = failed` deve ser investigada antes de prosseguir — ver a nota de reprodutibilidade acima antes de assumir que é um bug. A pasta `output/` precisa existir antes de rodar o `04` (o `COPY` não cria diretórios).
-5. (Opcional) Abra `exploring_script.R` no RStudio para reproduzir a validação exploratória dos dados brutos — `stopifnot()` em cada etapa crítica. As validações empíricas da redesign de 2026-07-20 já estão incorporadas ao próprio `exploring_script.R` (v4.4-2026-07-20).
-6. Aponte o Power BI para os 3 arquivos parquet em `output/`.
+4. Confira os checks: cada arquivo termina em **uma única query consolidada** que retorna `check_name | actual | expected | status` (54 checks no total, entre os 4 arquivos; falhas aparecem no topo do grid). Qualquer linha com `status = failed` deve ser investigada antes de prosseguir — ver a nota de reprodutibilidade acima antes de assumir que é um bug. A pasta `output/parquets/` precisa existir antes de rodar o `04` (o `COPY` não cria diretórios).
+5. Rode a suíte `viz/` (ver `viz/README.md`) para gerar os gráficos e mapas a partir dos parquets, ou aponte o Power BI para os 3 arquivos em `output/parquets/`.
+6. (Opcional) Rode `exploration/exploring_script.R` para reproduzir, em R, a validação independente das mesmas decisões (filtro de desmatamento, lag do join IBAMA/PRODES, sensibilidade do limiar, EGS reconstruído) — é a checagem cruzada da implementação SQL, não uma etapa obrigatória do pipeline.
 
 ---
 
-## Datas de download e reprodutibilidade (Fix S15)
+## Datas de download e reprodutibilidade
 
 Os valores esperados nos blocos de check (`n_ibama = 60707`, `total_fines = 26814492927`, `n_absolute_gap = 3063`, etc.) são uma fotografia dos dados na data em que foram baixados — **não são invariantes da fonte**. IBAMA revisa retroativamente seus CSVs de autos de infração (cancelamentos, correções, novos registros); PRODES publica estimativa preliminar e consolida o ano mais recente meses depois. Quem baixar os dados de novo, hoje ou no futuro, pode ver checks `failed` sem que haja bug algum no pipeline — só dado mais recente que o snapshot documentado aqui.
 
 | Fonte | Data do snapshot usado | Observação |
 |---|---|---|
-| PRODES (`data_prodes/`) | 25/04/2026 (no próprio nome do arquivo) | 2025 é o ano mais recente do painel e pode não estar consolidado — ver nota "último ano sujeito a revisão" |
-| IBAMA (`data_ibama/`) | **não registrada** | O nome dos arquivos (`auto_infracao_ano_*.csv`) não carrega data de download; anote a data manualmente ao baixar de novo |
+| PRODES (`data/data_prodes/`) | 25/04/2026 (no próprio nome do arquivo) | 2025 é o ano mais recente do painel e pode não estar consolidado — ver nota "último ano sujeito a revisão" |
+| IBAMA (`data/data_ibama_public/`) | **não registrada** | O nome dos arquivos (`auto_infracao_ano_*.csv`) não carrega data de download; anote a data manualmente ao baixar de novo |
 | IBGE — referência (`municipios.json`) | 12/07/2026 | Download manual via navegador (API não respondeu de forma confiável neste projeto) |
 | IBGE — áreas territoriais (`municipality_area_2025.csv`) | 20/07/2026 | Convertido de `.xls` para CSV — ver nota de delimitador em `01_staging.sql` |
 | IBGE/Sidra — IPCA | 10/07/2026 (no próprio nome do arquivo) | — |
@@ -115,7 +129,7 @@ Antes de comparar um check `failed` com o pipeline, confirme se algum dos 5 arqu
 
 ---
 
-## `.gitignore` recomendado
+## `.gitignore`
 
 ```
 # RStudio
@@ -124,40 +138,44 @@ Antes de comparar um check `failed` com o pipeline, confirme se algum dos 5 arqu
 .RData
 .Ruserdata
 
-# dados brutos — grandes, download manual, regeneráveis
-# (data_ipca/ NÃO entra: o CSV do IPCA é versionado como snapshot)
-data_prodes/
-data_ibama/
-data_ibge/
-
-# saída do pipeline — regenerável a partir do banco
-output/
-
-# banco DuckDB local e binário
+# banco DuckDB local, binário do CLI, write-ahead log — grandes, regeneráveis
 project2.duckdb
 duckdb.exe
 *.wal
+
+# caches intermediários da suíte viz/ — regenerados no primeiro run local
+output/parquets/viz_*.parquet
+
+# dado bruto do IBAMA com identificação do autuado — nunca publicizado
+# (a versão sem PII, data/data_ibama_public/, É versionada)
+data/data_ibama/
+
+# malha antes da simplificação — artefato intermediário, regenerado por
+# viz/00_build_mesh.R (só a versão simplificada é lida por viz/)
+data/data_ibge/malha_772_amazonia_legal.geojson
+
+# material interno do processo de pesquisa, não faz parte do repositório público
+references/
 ```
+
+Dados brutos (`data/data_prodes/`, `data/data_ibama_public/`, `data/data_ibge/`, `data/data_ipca/`) e os parquets finais (`output/parquets/`) são versionados: é o que torna o repositório reprodutível a partir de um clone limpo, sem depender de um download externo. `output/visualizations/` e `deliverables/` também são versionados — os resultados e os textos finais ficam legíveis direto no GitHub, além do depósito com DOI no Zenodo/preprint.
 
 ---
 
 ## Documentação do projeto
 
-- `final_reference.md` — apêndice técnico consolidado: metodologia (com base empírica de cada decisão), validações, limitações, histórico de desenvolvimento, resultados confirmados em produção.
-- `sql_technical_fixes.md` — histórico vivo de achados e correções técnicas do pipeline SQL, incluindo o registro empírico completo da redesign dos rankings (2026-07-20).
-- `p2_results_narrative_draft.md` — narrativa de portfólio (o que o sistema faz, o que os dados mostram), v3, re-ancorada no pipeline v5.
-- `p2_writing_sample.md` — texto autoral sobre o projeto (decisões metodológicas e limites).
-- `p2_horizonte_produto.md` — horizonte de produto (nacionalização, multi-bioma, multi-jurisdição); não é plano de execução do MVP.
-- `exploration/exploring_script_explained.txt` / `sql/sql_explained.md` — guia comentado, linha a linha, do R e dos 4 arquivos SQL. Material de estudo, não faz parte do pipeline executável.
+- `deliverables/EGMS_01_resumo_executivo.docx` — síntese de 2 a 3 páginas.
+- `deliverables/EGMS_02_writing_sample.docx` — texto autoral completo: decisões metodológicas, validação, resultados, limites.
+- `deliverables/EGMS_03_relatorio_estendido.docx` — apêndice técnico completo (todas as decisões com o teste empírico correspondente).
+- `viz/README.md` — como rodar a suíte de visualização.
 
 ---
 
-## Limitações conhecidas (resumo — detalhamento em `final_reference.md`, Seção 6)
+## Limitações conhecidas (resumo — detalhamento em `deliverables/EGMS_03_relatorio_estendido.docx`)
 
 - **O índice mede lacuna de fiscalização *federal*.** Só autos do IBAMA entram como resposta; aparatos estaduais ativos (ex.: SEMAS-PA, IPAAM-AM) não são capturados — um EGS alto é compatível com ausência real, substituição estadual, ou presença federal sem efeito.
 - **PRODES ≠ desmatamento ilegal.** O índice não distingue supressão autorizada (AUTEX/DOF) de ilegal — caso verificado: Barra do Bugres/MT.
 - **Resposta = autos lavrados.** Embargos, apreensões, ação penal e arrecadação efetiva das multas não entram.
 - **EGS é ordinal na prática.** A ordenação é robusta (testada por sensibilidade); distâncias entre scores não têm interpretação direta.
-- **Amazônia Legal apenas**; extensão exige join espacial (ver `p2_horizonte_produto.md`).
+- **Amazônia Legal apenas**; extensão a outros biomas ou jurisdições exige novo join espacial.
 - **Último ano sujeito a revisão** — o dado PRODES 2025 pode não estar consolidado; a média de 3 anos o inclui, com essa ressalva.
-- **`exploring_script.R` não tem o tratamento de portabilidade do SQL** (paths relativos ao working directory).

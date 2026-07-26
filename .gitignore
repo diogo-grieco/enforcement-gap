@@ -2,14 +2,23 @@
 .Rhistory
 .RData
 .Ruserdata
-data_ibama/
-data_prodes/
-data_ibge/
-output/
+
+# banco DuckDB local, binário do CLI, write-ahead log — grandes, regeneráveis
 project2.duckdb
 duckdb.exe
 *.wal
 
-# entregáveis (relatórios .docx/.html) — distribuídos por fora do repo
-# (Zenodo/preprint), não versionados
-entregaveis/
+# dado bruto do IBAMA com nome/CPF/CNPJ do autuado — nunca publicizado
+# (a versão sem PII, data/data_ibama_public/, É versionada)
+data/data_ibama/
+
+# malha antes da simplificação — artefato intermediário do 00_build_mesh.R,
+# não lido por nenhum script depois de gerada (viz/ usa só a versão
+# simplificada); regenerada localmente ao rodar o script
+data/data_ibge/malha_772_amazonia_legal.geojson
+
+# caches intermediários da suíte viz/ — regenerados no primeiro run local
+output/parquets/viz_*.parquet
+
+# material interno do processo de pesquisa — não faz parte do repositório público
+references/
