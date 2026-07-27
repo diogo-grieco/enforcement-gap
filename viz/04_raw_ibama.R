@@ -9,7 +9,8 @@
 #          intermediate that the offender network (07) also reads.
 #            11 Lorenz curve of fine concentration across offenders
 #            12 cancellation-rate series (2017-2019 spike) + by state
-#            13 histogram of the fact -> notice lag (long tail)
+#            13 histogram of the fact -> notice lag (long tail; axis label
+#               uses the arrow glyph, not ASCII "->")
 #            14 embargo/apreensão share by EGS quintile
 #            17 choropleth: auto cancellation rate by municipality
 #          Slowest script (reads the 18 yearly CSVs via load_ibama_clean(),
@@ -112,7 +113,9 @@ p_lag <- ggplot(lag_df, aes(x = lag_days)) +
   geom_vline(xintercept = median(lag_df$lag_days), linetype = "dashed") +
   annotate("text", x = median(lag_df$lag_days), y = Inf, vjust = 2, hjust = -0.1,
            label = paste0("mediana = ", median(lag_df$lag_days), " dias"), size = 3) +
-  labs(x = "Dias (fato -> autuação)", y = "Autos") +
+  scale_x_continuous(labels = number) +
+  scale_y_continuous(labels = number) +
+  labs(x = "Dias (fato \u2192 autuação)", y = "Autos") +
   theme_chart
 
 # -----------------------------------------------------------------------------

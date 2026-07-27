@@ -48,7 +48,7 @@ top20 <- ranking %>%
 p_top20_egs <- ggplot(top20, aes(x = avg_egs_18y, y = municipality_name)) +
   geom_col(fill = "#2e6e54", width = 0.7) +
   geom_text(aes(label = number(avg_egs_18y, accuracy = 0.001)), hjust = -0.15, size = 3) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0.15))) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.15)), labels = number) +
   labs(x = "avg_egs_18y", y = NULL) +
   theme_chart
 
@@ -97,15 +97,24 @@ anchors <- scatter_df %>% filter(municipality_name %in% ANCHOR_NAMES)
 stopifnot("anchors: expected 5 anchor cases" = nrow(anchors) == length(ANCHOR_NAMES))
 
 # Single reference diagonal (slope 1, intercept log10(1e5) in log-log space =
-# fines = 1e5 x desmatado_km2): the EGS = 1 boundary, proportional response.
+# fines = 1e5 x desmatado_km2, i.e. R$ 100k per km2). This is a CHOSEN
+# proportionality reference, NOT the EGS = 1 locus: EGS also depends on
+# n_infractions, which is on neither axis, and is annual, while this plot
+# aggregates 18 years. Earlier versions of the code and of the figure captions
+# called it "the EGS = 1 boundary" — corrected by the sixth audit.
 p_scatter <- ggplot(scatter_df, aes(x = total_desmatado_km2, y = total_fines_plot)) +
   geom_abline(slope = 1, intercept = log10(1e5), linetype = "dashed", colour = "grey60") +
   geom_point(aes(colour = dominant), alpha = 0.6, size = 1.8) +
-  scale_x_log10(labels = label_number(scale_cut = cut_short_scale())) +
-  scale_y_log10(labels = label_number(scale_cut = cut_short_scale())) +
+  scale_x_log10(labels = label_number(scale_cut = cut_br_scale())) +
+  scale_y_log10(labels = label_number(scale_cut = cut_br_scale())) +
   scale_colour_manual(values = GAP_PALETTE, labels = GAP_LABELS, name = "Tipo dominante") +
+  # seed: ggrepel places labels with random jitter AT DRAW TIME, so the same
+  # plot object rendered twice yields slightly different label positions (and
+  # a PNG that differs byte-for-byte). A fixed seed makes the output
+  # deterministic — the figure on disk stays identical to the one embedded in
+  # the deliverables across reruns. set.seed() before the plot would NOT work.
   geom_text_repel(data = anchors, aes(label = municipality_name),
-                  size = 3, min.segment.length = 0) +
+                  size = 3, min.segment.length = 0, seed = 42) +
   labs(caption = "Pontos com multas zeradas (129/772) fixados em R$ 1.000 para permanecer na escala log.",
        x = "Total desmatado (km², log)", y = "Total de multas (R$ deflacionado, log)") +
   theme_chart +
@@ -123,8 +132,10 @@ p_quadrant <- ggplot(ranking, aes(x = avg_egs_18y, y = avg_egs_3y)) +
   scale_colour_manual(values = c("TRUE" = "#a63d2f", "FALSE" = "#2e6e54"),
                       labels = c("TRUE" = "piorando", "FALSE" = "melhorando"), name = NULL) +
   scale_size_continuous(range = c(0.5, 5), name = "Anos de pressão") +
-  geom_text_repel(data = ranking %>% slice_max(avg_egs_18y, n = 8),
-                  aes(label = municipality_name), size = 3, min.segment.length = 0) +
+  scale_x_continuous(labels = number) +
+  scale_y_continuous(labels = number) +
+  geom_text_repel(data = ranking %>% slice_max(avg_egs_18y, n = 8),   # seed: see item 5 above
+                  aes(label = municipality_name), size = 3, min.segment.length = 0, seed = 42) +
   labs(x = "avg_egs_18y (histórico)", y = "avg_egs_3y (2023-25)") +
   theme_chart
 
@@ -140,6 +151,7 @@ p_anchors <- ggplot(anchor_series, aes(x = year, y = egs)) +
   geom_line(colour = "#2e6e54", linewidth = 0.8) +
   geom_point(colour = "#2e6e54", size = 1) +
   facet_wrap(~ municipality_name, ncol = 5) +
+  scale_y_continuous(labels = number) +
   labs(x = NULL, y = "EGS (anual)") +
   theme_chart +
   theme(panel.spacing = unit(0.8, "lines"))

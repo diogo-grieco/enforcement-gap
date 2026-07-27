@@ -48,10 +48,30 @@ SELECT * FROM read_csv(
 -- is dropped (never used); CPF_CNPJ_INFRATOR is replaced with a stable
 -- RANDOM surrogate id (pid_ + 16 random hex, one per offender) — the
 -- surrogate preserves equality, so offender counts (Lorenz curve,
--- offender network) are unchanged, but because it is random (not
--- derived from the CPF/CNPJ) the real identity is unrecoverable by
--- construction. The mapping is kept local and never versioned.
+-- offender network) are unchanged. Because it is random (not derived
+-- from the CPF/CNPJ), the pid_ ITSELF is not reversible: no salt or
+-- known function maps a candidate CPF back to it, and the mapping is
+-- kept local and never versioned.
+-- That is NOT the same as anonymised. The other 12 columns are verbatim
+-- copies of the public IBAMA CSV, which does carry NOME_INFRATOR — and
+-- (COD_MUNICIPIO, DAT_HORA_AUTO_INFRACAO, VAL_AUTO_INFRACAO) uniquely
+-- identifies 74.3% of the rows, so the source can be re-joined. This
+-- folder is a reduced copy of a public administrative dataset, not a
+-- de-identified one; the pid_ exists so that THIS repo does not
+-- redistribute CPF/CNPJ, not to prevent re-identification of a record
+-- the agency publishes with identification.
 -- See data/data_ibama_public/README.md.
+--
+-- quote = '"' IS REQUIRED — do not remove it as redundant. 86 rows across
+-- the 2019-2025 files carry a ';' INSIDE a quoted field (multi-value embargo
+-- term codes, e.g. "3SQPDOXW;47UJ5XGX"). The CSV sniffer only samples the
+-- FIRST file of the glob (2008), which has no quoted fields at all, so it
+-- infers quote = (empty) and then reads those 86 rows as having 14 columns.
+-- DuckDB <= 1.1.x happened to guess '"' anyway and the file loaded; from
+-- 1.2.0 on, strict_mode turns the same guess into a hard abort
+-- ("CSV Error on Line: 14421 ... Expected Number of Columns: 13 Found: 14").
+-- Declaring the quote character makes the read independent of both the
+-- sniffer's sample and the DuckDB version. Row count is 309,116 either way.
 -- Granularity: infraction notice | Expected: 309,116 x 13
 ----------------------------------------------------------
 
@@ -59,6 +79,7 @@ CREATE OR REPLACE TABLE project2.staging.ibama_raw AS
 SELECT * FROM read_csv(
     getvariable('data_root') || '/data/data_ibama_public/auto_infracao_ano_*.csv',
     delim = ';',
+    quote = '"',          -- required: see note above (86 rows have ';' inside quotes)
     header = true,
     all_varchar = true
 );
@@ -162,6 +183,18 @@ WITH checks AS (
     -- affects egs_final (RS is outside the Legal Amazon; the NULL rows
     -- fail the ibama_clean status filter anyway) — documented, not corrected.
     UNION ALL SELECT 'invalid_geocode_ibama', CAST(COUNT(*) AS VARCHAR), '29' FROM project2.staging.ibama_raw WHERE COD_MUNICIPIO IS NULL OR LENGTH(COD_MUNICIPIO) != 7
+    -- out_of_scope_geocodes_prodes: expected is 33, not 0 — same spirit as
+    -- invalid_geocode_ibama above. The TerraBrasilis export labelled
+    -- "legal_amazon" ships 805 municipalities, but 33 of them sit in states
+    -- OUTSIDE the Legal Amazon (GO 18, PI 6, MS 5, BA 4), each with
+    -- area = 0 in all 18 years. 805 - 33 = 772, the official Legal Amazon
+    -- count; 02_marts.sql filters them out of prodes_clean by geocode prefix.
+    -- This check watches the SOURCE, not the filter (a check on prodes_clean
+    -- would be tautological — the WHERE there guarantees 0 by construction;
+    -- n_geocodes_prodes_clean = 772 already guards that side). If a future
+    -- PRODES download changes which municipalities it ships, this fires and
+    -- the marts filter must be revisited before trusting the panel.
+    UNION ALL SELECT 'out_of_scope_geocodes_prodes', CAST(COUNT(DISTINCT geocode_ibge) AS VARCHAR), '33' FROM project2.staging.prodes_raw WHERE SUBSTR(geocode_ibge, 1, 2) NOT IN ('11','12','13','14','15','16','17','21','51')
     UNION ALL SELECT 'n_municipality_ref_raw', CAST(COUNT(*) AS VARCHAR), '5571' FROM project2.staging.municipality_ref_raw
     UNION ALL SELECT 'n_municipality_area_raw', CAST(COUNT(*) AS VARCHAR), '5575' FROM project2.staging.municipality_area_raw
 )

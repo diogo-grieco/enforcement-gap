@@ -36,18 +36,21 @@ NCOL_IBAMA_RAW         <- 84
 NROW_IBAMA_FILTERED    <- 60707
 TOTAL_IBAMA_FINES      <- 26814492927
 NA_IBAMA_DATES         <- 0
-NROW_PRODES_RAW        <- 14490
+NROW_PRODES_RAW        <- 14490   # export bruto do TerraBrasilis (805 municipios)
 NCOL_PRODES_RAW        <- 5
+NROW_PRODES_CLEAN      <- 13896   # apos o filtro de escopo Amazonia Legal (772 x 18)
+N_GEOCODES_PRODES_CLEAN <- 772    # 767 nomes distintos; 5 pares de homonimos
+N_OUT_OF_SCOPE_GEOCODES <- 33     # GO 18, PI 6, MS 5, BA 4 - fora da Amazonia Legal
 N_ABSOLUTE_GAP         <- 3063
 N_RECOVERED_GAP_T1     <- 724
 NROW_IPCA_RAW          <- 216
 NROW_IBAMA_LAG_BASE    <- 17642  
 N_IBAMA_LAG_NEGATIVE   <- 355    
 NROW_IBAMA_LAG         <- 17287  
-N_NO_PRESSURE          <- 8142   # area_km2 < 1 (56.2% of panel)
+N_NO_PRESSURE          <- 7548   # area_km2 < 1 (54.3% of panel)
 N_MEASURED_GAP         <- 3285   # complements N_ABSOLUTE_GAP (3,063)
 N_FLOOR_ACTIVE         <- 28     # measured_gap years where raw denominator < 1
-N_RECLASS_MATERIALITY  <- 3291   # panel rows with 0.0625 <= area_km2 < 1
+N_RECLASS_MATERIALITY  <- 3291   # panel rows with 0.0625 <= area_km2 < 1 (23.7%)
 N_MUNI_WITH_PRESSURE   <- 552    # municipalities with >= 1 pressure year
 
 
@@ -339,16 +342,30 @@ stopifnot(
 #### Cleaning PRODES data
 # -----------------------------------------------------------------------------
 
+# SCOPE FILTER (Legal Amazon only) - mirrors pipeline/02_marts.sql:prodes_clean.
+# The TerraBrasilis export labelled "legal_amazon" ships 805 geocodes, but 33 of
+# them sit in states OUTSIDE the Legal Amazon (GO 18, PI 6, MS 5, BA 4), each with
+# area_km2 = 0 in all 18 years. 805 - 33 = 772, the official IBGE count. Keeping
+# the same 9 state prefixes as the SQL is what makes this script a cross-check of
+# the pipeline rather than a validation of a different universe.
+AL_STATE_PREFIXES <- c("11","12","13","14","15","16","17",  # RO AC AM RR PA AP TO
+                       "21",                                 # MA
+                       "51")                                 # MT
+
 prodes_clean <- prodes_raw %>%
   mutate(
     year         = as.integer(year),
     area_km2     = as.numeric(str_replace(`area km²`, ",", "."))
   ) %>%
+  filter(str_sub(geocode_ibge, 1, 2) %in% AL_STATE_PREFIXES) %>%
   select(geocode_ibge, mun, year, area_km2)
 
 stopifnot(
   "prodes_clean: unexpected row count" =
-    nrow(prodes_clean) == NROW_PRODES_RAW,
+    nrow(prodes_clean) == NROW_PRODES_CLEAN,
+  "prodes_clean: unexpected out-of-scope geocode count dropped" =
+    n_distinct(prodes_raw$geocode_ibge) - n_distinct(prodes_clean$geocode_ibge) ==
+      N_OUT_OF_SCOPE_GEOCODES,
   "prodes_clean: NAs in geocode_ibge" =
     sum(is.na(prodes_clean$geocode_ibge)) == 0,
   "prodes_clean: NAs in year" =
@@ -356,7 +373,7 @@ stopifnot(
   "prodes_clean: NAs in area_km2" =
     sum(is.na(prodes_clean$area_km2)) == 0,
   "prodes_clean: unique municipalities" =
-    n_distinct(prodes_clean$geocode_ibge) == 805,
+    n_distinct(prodes_clean$geocode_ibge) == N_GEOCODES_PRODES_CLEAN,
   "prodes_clean: years out of range" =
     all(prodes_clean$year %in% 2008:2025)
 )
@@ -364,11 +381,11 @@ stopifnot(
 # -----------------------------------------------------------------------------
 #### General exploring
 
-# municipalities = 800 | geocode_ibge = 805 | 5 municipalities with same name
+# municipality names = 767 | geocode_ibge = 772 | 5 pairs of homonyms
 # years = 18 (2008-2025)
 
 # quantiles(area_km2):
-# min = 0 | p10 = 0 | p25 = 0 | median = 0.56 | p75 = 4.89 | p90 = 21.1 |
+# min = 0 | p10 = 0 | p25 = 0 | median = 0.68 | p75 = 5.36 | p90 = 22.1 |
 # max = 797
 
 # Structural check against the official INPE rate, 4 anchor years:
@@ -419,10 +436,10 @@ prodes_clean %>%
 # -----------------------------------------------------------------------------
 #### Consistency checks
 
-# ibama_geocode_ibge = 2,806 | prodes_geocode_ibge = 805 (Legal Amazon)
-# 2,128 geocode_ibge present in ibama but not in prodes (outside Amazon)
-# 127 geocode_ibge present in prodes but not in ibama (no enforcement)
-# 678 geocode_ibge present in both ibama and prodes (enforcement)
+# ibama_geocode_ibge = 2,806 | prodes_geocode_ibge = 772 (Legal Amazon)
+# 2,160 geocode_ibge present in ibama but not in prodes (outside Amazon)
+# 126 geocode_ibge present in prodes but not in ibama (no enforcement)
+# 646 geocode_ibge present in both ibama and prodes (enforcement)
 # -----------------------------------------------------------------------------
 
 # Coverage
@@ -458,7 +475,9 @@ intersect(ibama_codes, prodes_codes) %>%
 #   only_t = 4.7% | only_t1 = 1.0% | both = 59.2% | neither = 35.1%
 #   Same-year join confirmed.
 #
-# pct_neither inflated by 2,128 geocodes outside Amazon
+# pct_neither inflated by 2,160 geocodes outside Amazon.
+# NOTE: the four shares are invariant to the scope filter - the 33 dropped
+# municipalities have area_km2 = 0 in every year, so they never matched anyway.
 # =============================================================================
 
 lag_check <- ibama_filtered %>%
@@ -495,7 +514,7 @@ lag_check %>%
 # How many municipalities recovered if t+1 event attributed to t
 # deforestation?
 # Result (materiality area >= 1; response = fine_value >= 0.01):
-#   absolute_gap = 3,063 (21.1% of 14,490) | recovered = 724 | 23.6%
+#   absolute_gap = 3,063 (22.0% of 13,896) | recovered = 724 | 23.6%
 # =============================================================================
 
 absolute_gap_cases <- prodes_clean %>%
@@ -590,7 +609,7 @@ ipca_deflator <- ipca_raw %>%
   
   stopifnot(
     "egs_panel: unexpected row count" =
-      nrow(egs_panel) == NROW_PRODES_RAW,
+      nrow(egs_panel) == NROW_PRODES_CLEAN,
     "egs_panel: no_pressure count" =
       sum(egs_panel$gap_type == "no_pressure") == N_NO_PRESSURE,
     "egs_panel: absolute_gap count" =
@@ -639,9 +658,10 @@ ipca_deflator <- ipca_raw %>%
   
   # Result: ranking by 0-fill mean EGS computed under three thresholds
   # (1 km2 | 6.25 ha = PRODES minimum mapping unit | none) gives IDENTICAL
-  # top 10/20/50 and Spearman = 0.985 across all 805 municipalities — although
-  # 3,291 rows (22.7%) are reclassified between thresholds. The threshold
-  # affects the descriptive statistic (56.2% no_pressure), not the ranking.
+  # top 10/20/50 and Spearman = 0.9868 (1 km2 vs 6.25 ha) / 0.9866 (1 km2 vs
+  # none) across all 772 municipalities — although 3,291 rows (23.7%) are
+  # reclassified between thresholds. The threshold affects the descriptive
+  # statistic (54.3% no_pressure), not the ranking.
   # Citable as a robustness result.
   # -----------------------------------------------------------------------------
   

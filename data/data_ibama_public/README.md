@@ -21,10 +21,36 @@ contagem que depende de identidade de autuado (curva de Lorenz da concentração
 de multas, rede de infratores multi-município) é idêntica ao dado original.
 
 Diferente de um hash do próprio CPF/CNPJ, o substituto **não é derivado do
-valor original**: é aleatório. Por isso a identidade real não é recuperável a
-partir do dado publicado por construção, e não por ofuscação — não há salt nem
-função conhecida que, aplicada a um CPF candidato, reproduza o `pid_`. O mapa
-que permitiria a reversão é mantido **apenas localmente e nunca versionado**.
+valor original**: é aleatório. Por isso **o `pid_` não é reversível** — não há
+salt nem função conhecida que, aplicada a um CPF candidato, reproduza o `pid_`.
+O mapa que permitiria a reversão é mantido **apenas localmente e nunca
+versionado**.
+
+## O que isto não é: uma anonimização
+
+Esta pasta é um **recorte reduzido de um dado administrativo público**, não um
+dado desidentificado. As outras 12 colunas vêm sem alteração do CSV original do
+IBAMA, que é público e **traz `NOME_INFRATOR` e `CPF_CNPJ_INFRATOR`**. Medido
+sobre as 309.116 linhas:
+
+```
+chave (COD_MUNICIPIO, DAT_HORA_AUTO_INFRACAO, VAL_AUTO_INFRACAO)
+    -> 229.694 linhas (74,3%) são ÚNICAS
++ COD_INFRACAO + SIT_CANCELADO
+    -> 77,9% são únicas
+CD_TERMOS_EMBARGOS  presente em 23,8% das linhas (nº de termo público)
+CD_TERMOS_APREENSAO presente em 25,0% das linhas (nº de termo público)
+```
+
+Ou seja: quem baixar os mesmos CSVs de `dadosabertos.ibama.gov.br` e fizer um
+join por essas colunas recupera nome e CPF/CNPJ para a maior parte das linhas —
+e, por transitividade, o mapa `pid_ → CPF/CNPJ`.
+
+Isso é consequência do desenho, não falha dele. O objetivo do `pid_` é permitir
+que as contagens por identidade (Lorenz, Gini, rede multi-município) sejam
+reproduzíveis **sem que este repositório redistribua CPF/CNPJ**, não impedir a
+reidentificação de um registro que o próprio órgão publica com identificação.
+Nenhum dado novo é exposto aqui.
 
 Contagem de linhas idêntica ao bruto: 309.116 (verificado coluna a coluna
 contra `data/data_ibama/` no momento da derivação).

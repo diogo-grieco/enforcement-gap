@@ -72,7 +72,16 @@ m5 <- feols(log_infra_f1 ~ d_pos + d_pos:high_capacity + d_neg + log_area + log_
               geocode_ibge + year,
             data = panel %>% filter(year >= 2017), cluster = ~geocode_ibge)  # capacity
 
-etable(m1, m2, m3, m4, m5)   # full tables to console for the write-up
+# m2f: same specification as m2 with the FINE as the outcome instead of the
+# notice count. The extended report cites its coefficient (-0.401) alongside
+# m2's (-0.057); until the sixth audit this model existed only in the write-up,
+# not in the code — log_fine_f1 was built above and never used, so the published
+# number could not be reproduced from this repository. It is not plotted (item
+# 15 shows the notice-count models only); it exists so the citation is auditable.
+m2f <- feols(log_fine_f1 ~ d_log_area + log_area | geocode_ibge + year,
+             data = panel, cluster = ~geocode_ibge)                      # H2, fines
+
+etable(m1, m2, m2f, m3, m4, m5)   # full tables to console for the write-up
 
 # -----------------------------------------------------------------------------
 #### 15 — coefficient plot
@@ -85,13 +94,13 @@ grab <- function(model, term, label) {
              se       = ct[term, "Std. Error"], row.names = NULL)
 }
 coef_df <- bind_rows(
-  grab(m1, "log_area",           "Desmatamento(t) -> autos(t)"),
-  grab(m1, "log_area_l1",        "Desmatamento(t-1) -> autos(t)"),
-  grab(m2, "d_log_area",         "Mudança abrupta(t) -> autos(t+1)"),
-  grab(m3, "d_log_area",         "Mudança abrupta(t) -> autos(t+2)"),
-  grab(m4, "d_pos",              "Surto(t) -> autos(t+1)"),
-  grab(m4, "d_neg",              "Queda(t) -> autos(t+1)"),
-  grab(m5, "d_pos:high_capacity","Surto x alta capacidade -> autos(t+1)")
+  grab(m1, "log_area",           "Desmatamento(t) \u2192 autos(t)"),
+  grab(m1, "log_area_l1",        "Desmatamento(t-1) \u2192 autos(t)"),
+  grab(m2, "d_log_area",         "Mudança abrupta(t) \u2192 autos(t+1)"),
+  grab(m3, "d_log_area",         "Mudança abrupta(t) \u2192 autos(t+2)"),
+  grab(m4, "d_pos",              "Surto(t) \u2192 autos(t+1)"),
+  grab(m4, "d_neg",              "Queda(t) \u2192 autos(t+1)"),
+  grab(m5, "d_pos:high_capacity","Surto \u00d7 alta capacidade \u2192 autos(t+1)")
 ) %>%
   mutate(lo = estimate - 1.96 * se, hi = estimate + 1.96 * se,
          label = factor(label, levels = rev(label)))
@@ -100,6 +109,7 @@ p_coef <- ggplot(coef_df, aes(x = estimate, y = label)) +
   geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
   geom_pointrange(aes(xmin = lo, xmax = hi, colour = estimate < 0), size = 0.5) +
   scale_colour_manual(values = c("TRUE" = "#a63d2f", "FALSE" = "#2e6e54"), guide = "none") +
+  scale_x_continuous(labels = number) +
   labs(x = "Coeficiente (IC 95%)", y = NULL) +
   theme_chart
 
@@ -162,6 +172,7 @@ p_event <- ggplot(es_df, aes(x = event_time, y = estimate, colour = outcome)) +
                      labels = c("-2\n(placebo)","-1\n(placebo)","0\n(surto)","+1","+2")) +
   scale_colour_manual(values = c("autos" = "#2e6e54", "multas (deflacionadas)" = "#a63d2f"),
                       name = "Variável") +
+  scale_y_continuous(labels = number) +
   labs(x = "Tempo do evento (anos em relação ao surto)", y = "Coeficiente (IC 95%)") +
   theme_chart
 
@@ -175,7 +186,8 @@ p_event <- ggplot(es_df, aes(x = event_time, y = estimate, colour = outcome)) +
 p_ridge <- ggplot(final %>% filter(egs > 0),   # drop the no-pressure zero mass
                   aes(x = egs, y = factor(year), fill = after_stat(x))) +
   geom_density_ridges_gradient(scale = 2.2, rel_min_height = 0.01, colour = "white") +
-  scale_fill_gradientn(colours = QUINTILE_PALETTE, name = "EGS") +
+  scale_fill_gradientn(colours = QUINTILE_PALETTE, name = "EGS", labels = number) +
+  scale_x_continuous(labels = number) +
   labs(x = "EGS (anual, > 0)", y = NULL) +
   theme_chart
 

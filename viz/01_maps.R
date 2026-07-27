@@ -107,7 +107,7 @@ m_bivariate <- ggplot(map_data) +
           shape = 21, fill = "#4a5d8a2e", colour = "#4a5d8a",
           stroke = 0.4, inherit.aes = FALSE) +
   scale_size_area(max_size = 12, name = "Total de multas (R$, deflacionado)",
-                  labels = label_number(scale_cut = cut_short_scale())) +
+                  labels = label_number(scale_cut = cut_br_scale())) +
   geom_sf(data = map_data %>% filter(code_muni %in% top20_codes),
           fill = NA, colour = "#1a3d2e", linewidth = 0.6, inherit.aes = FALSE) +
   theme_map

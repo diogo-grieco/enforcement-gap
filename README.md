@@ -76,7 +76,15 @@ Os nomes de arquivo esperados por `01_staging.sql` usam wildcard (`*`) para PROD
 
 ## Dados do IBAMA e privacidade
 
-Os autos de infração do IBAMA, como publicados, trazem nome e CPF/CNPJ do autuado. Como este repositório é público, `data/data_ibama_public/` mantém apenas as 13 das 84 colunas brutas efetivamente usadas em algum ponto do pipeline ou da suíte `viz/` (município, datas, valor da multa, tipo e código da infração, status, embargo/apreensão). `NOME_INFRATOR` é descartado (nunca é lido em nenhum script). `CPF_CNPJ_INFRATOR` é substituído por um **identificador substituto aleatório e estável** (`pid_` + 16 dígitos hexadecimais sorteados, um por autuado): o mesmo autuado recebe sempre o mesmo `pid_`, então toda contagem que depende de identidade (curva de Lorenz, rede de infratores multi-município) é idêntica ao dado original. O mapa `CPF/CNPJ → pid_` é gerado uma única vez, mantido apenas localmente e **nunca versionado**; como o substituto é aleatório (não derivado do próprio CPF/CNPJ), a identidade real não é recuperável a partir do dado publicado — por construção, e não por ofuscação. O CSV original com nome/CPF/CNPJ nunca é versionado neste repositório.
+Os autos de infração do IBAMA, como publicados, trazem nome e CPF/CNPJ do autuado. Como este repositório é público, `data/data_ibama_public/` mantém apenas as 13 das 84 colunas brutas efetivamente usadas em algum ponto do pipeline ou da suíte `viz/` (município, datas, valor da multa, tipo e código da infração, status, embargo/apreensão). `NOME_INFRATOR` é descartado (nunca é lido em nenhum script). `CPF_CNPJ_INFRATOR` é substituído por um **identificador substituto aleatório e estável** (`pid_` + 16 dígitos hexadecimais sorteados, um por autuado): o mesmo autuado recebe sempre o mesmo `pid_`, então toda contagem que depende de identidade (curva de Lorenz, rede de infratores multi-município) é idêntica ao dado original. O mapa `CPF/CNPJ → pid_` é gerado uma única vez, mantido apenas localmente e **nunca versionado**. O CSV original com nome/CPF/CNPJ nunca é versionado neste repositório.
+
+**O que essa substituição garante, e o que ela não garante.** Como o substituto é aleatório — não derivado do próprio CPF/CNPJ —, **o `pid_` não é reversível**: não existe salt, chave ou função conhecida que, aplicada a um CPF candidato, reproduza o identificador publicado. Uma versão anterior deste repositório usava `sha256(salt + CPF/CNPJ)` com o salt publicado no próprio README, o que *era* reversível por força bruta; essa versão foi substituída e nunca chegou a ser commitada (ver `CHANGELOG.md`).
+
+O que a substituição **não** faz é tornar a linha anônima. As outras 12 colunas são reproduzidas sem alteração a partir do CSV original do IBAMA, que é **público e traz `NOME_INFRATOR` e `CPF_CNPJ_INFRATOR`**. A combinação (`COD_MUNICIPIO`, `DAT_HORA_AUTO_INFRACAO`, `VAL_AUTO_INFRACAO`) identifica unicamente **74,3% das 309.116 linhas**, e `CD_TERMOS_EMBARGOS`/`CD_TERMOS_APREENSAO` são números de termo consultáveis nos registros do próprio IBAMA. Quem baixar a fonte original consegue, portanto, refazer o vínculo linha a linha — e, por transitividade, reconstruir o mapa `pid_ → CPF/CNPJ` para boa parte da base.
+
+Isso é uma consequência deliberada do desenho, não uma falha de execução: **o dado-fonte já é público com a identificação**, e esta pasta é uma cópia reduzida dele, não uma desidentificação. O propósito do `pid_` é permitir que as contagens por identidade (Lorenz, Gini, rede de infratores) sejam reproduzíveis **sem que este repositório redistribua CPF/CNPJ**, não impedir a reidentificação de um dado que o órgão publica. Quem precisar de um dado efetivamente anonimizado deve tratar esta pasta como o que ela é: um recorte de dado administrativo público.
+
+**Nota de reprodutibilidade:** por ser aleatório, o pseudônimo **não é bit-reproduzível**. Quem rerodar o script de derivação sobre o dado bruto do IBAMA vai gerar `pid_` diferentes dos publicados aqui, e a coluna não será comparável célula a célula com a deste repositório. Isso é deliberado (é o que impede a reversão) e não afeta nenhum resultado: tudo que o pipeline e a suíte `viz/` calculam a partir dessa coluna depende apenas de *igualdade preservada* — mesmo autuado, mesmo símbolo —, não do valor em si. A curva de Lorenz, o índice de Gini e a rede de infratores multi-município reproduzem identicamente sob qualquer rodada do script.
 
 ---
 
@@ -88,7 +96,7 @@ O topo de `01_staging.sql` define uma variável de sessão do DuckDB que é a **
 SET VARIABLE data_root = 'C:/Users/diogo/projects/project2';  -- editar aqui
 ```
 
-Todos os `read_csv`/`read_json_auto` do pipeline usam `getvariable('data_root') || '/...'`. Exceção deliberada: os paths de `COPY ... TO` em `04_export.sql` são literais absolutos (editar lá também) — ver nota no próprio arquivo.
+Todos os `read_csv`/`read_json_auto` do pipeline usam `getvariable('data_root') || '/...'`, **inclusive os `COPY ... TO` e o check de `04_export.sql`** — essa linha é, de fato, a única que precisa ser editada em todo o pipeline. Como a variável é de sessão, rode os quatro arquivos na mesma conexão (no DBeaver: mesma aba/conexão do `project2.duckdb`).
 
 ---
 
@@ -107,7 +115,7 @@ Todos os `read_csv`/`read_json_auto` do pipeline usam `getvariable('data_root') 
    04_export.sql     → materializa 3 parquets em output/parquets/
    ```
    No DBeaver: abrir o script, associar à conexão do `project2.duckdb`, `Execute SQL Script` (Alt+X) roda o arquivo inteiro, incluindo o bloco `== CHECKS ==` ao final.
-4. Confira os checks: cada arquivo termina em **uma única query consolidada** que retorna `check_name | actual | expected | status` (54 checks no total, entre os 4 arquivos; falhas aparecem no topo do grid). Qualquer linha com `status = failed` deve ser investigada antes de prosseguir — ver a nota de reprodutibilidade acima antes de assumir que é um bug. A pasta `output/parquets/` precisa existir antes de rodar o `04` (o `COPY` não cria diretórios).
+4. Confira os checks: cada arquivo termina em **uma única query consolidada** que retorna `check_name | actual | expected | status` (55 checks no total, entre os 4 arquivos; falhas aparecem no topo do grid). Qualquer linha com `status = failed` deve ser investigada antes de prosseguir — ver a nota de reprodutibilidade acima antes de assumir que é um bug. A pasta `output/parquets/` precisa existir antes de rodar o `04` (o `COPY` não cria diretórios).
 5. Rode a suíte `viz/` (ver `viz/README.md`) para gerar os gráficos e mapas a partir dos parquets, ou aponte o Power BI para os 3 arquivos em `output/parquets/`.
 6. (Opcional) Rode `exploration/exploring_script.R` para reproduzir, em R, a validação independente das mesmas decisões (filtro de desmatamento, lag do join IBAMA/PRODES, sensibilidade do limiar, EGS reconstruído) — é a checagem cruzada da implementação SQL, não uma etapa obrigatória do pipeline.
 
@@ -165,6 +173,8 @@ Dados brutos (`data/data_prodes/`, `data/data_ibama_public/`, `data/data_ibge/`,
 ## Licenças e citação
 
 O código-fonte (`pipeline/`, `viz/`, `exploration/`) está sob licença **MIT** — ver [`LICENSE`](LICENSE). Os dados derivados, parquets, visualizações e os três relatórios em `deliverables/` estão sob **Creative Commons Attribution 4.0 (CC BY 4.0)** — ver [`LICENSE-DATA.md`](LICENSE-DATA.md). Para citar este trabalho, ver [`CITATION.cff`](CITATION.cff).
+
+Mudanças de substância entre versões — incluindo as que alteraram números publicados — estão em [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 

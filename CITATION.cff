@@ -12,10 +12,15 @@ authors:
     given-names: "Diogo"
     orcid: "https://orcid.org/0009-0009-7859-0331"
 version: 1.0.0
-date-released: 2026-07-26
+date-released: 2026-07-27
 url: "https://github.com/diogo-grieco/enforcement-gap"
 repository-code: "https://github.com/diogo-grieco/enforcement-gap"
-license: MIT
+# Licenciamento duplo: MIT para o código-fonte (pipeline/, viz/, exploration/);
+# CC BY 4.0 para dados derivados, parquets, visualizações e os relatórios em
+# deliverables/. Ver LICENSE e LICENSE-DATA.md.
+license:
+  - MIT
+  - CC-BY-4.0
 keywords:
   - desmatamento
   - Amazônia Legal

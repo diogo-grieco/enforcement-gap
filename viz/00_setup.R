@@ -27,6 +27,11 @@ percent      <- function(x, ...) scales::percent(x, decimal.mark = ",", big.mark
 number       <- function(x, ...) scales::number(x, decimal.mark = ",", big.mark = ".", ...)
 label_number <- function(...)    scales::label_number(decimal.mark = ",", big.mark = ".", ...)
 
+# Sufixos de escala curta em português. scales::cut_short_scale() devolve
+# K/M/B/T (inglês) e vazava para os eixos do log-log e para a legenda do mapa
+# bivariado; cut_br_scale() é o equivalente pt-BR. Usar sempre este.
+cut_br_scale <- function() c(" " = 0, "mil" = 1e3, "mi" = 1e6, "bi" = 1e9, "tri" = 1e12)
+
 # -----------------------------------------------------------------------------
 #### Setting paths and files
 # -----------------------------------------------------------------------------

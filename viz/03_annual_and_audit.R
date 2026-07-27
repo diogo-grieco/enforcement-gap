@@ -38,8 +38,9 @@ p_annual <- ggplot() +
   geom_line(data = annual_long, aes(x = year, y = count, colour = type), linewidth = 1) +
   geom_point(data = annual_long, aes(x = year, y = count, colour = type)) +
   scale_colour_manual(values = GAP_PALETTE, labels = GAP_LABELS, name = "Tipo de lacuna") +
-  scale_y_continuous(name = "Municípios em lacuna",
-                     sec.axis = sec_axis(~ . / rescale_factor, name = "Total desmatado (km²)")) +
+  scale_y_continuous(name = "Municípios em lacuna", labels = number,
+                     sec.axis = sec_axis(~ . / rescale_factor, name = "Total desmatado (km²)",
+                                         labels = number)) +
   annotate("text", x = 2020.5, y = max(annual_long$count),
            label = "2019-2022\nchoque de capacidade", size = 3, colour = "#6b756d") +
   labs(x = NULL) +

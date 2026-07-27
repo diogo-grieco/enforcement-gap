@@ -12,12 +12,14 @@
 -- (a) MATERIALITY: area_km2 >= 1 km2, an order of magnitude above
 --     PRODES's minimum mapping area (6.25 ha). Sensitivity-tested: top
 --     10/20/50 of egs_ranking are IDENTICAL under thresholds of 1 km2,
---     6.25 ha, and no threshold at all (Spearman 0.985, 1 km2 vs 6.25 ha
---     rankings, across all 772 municipalities — the pair actually
---     computed in R; the no-threshold comparison was verified by top-N
---     overlap only). The threshold affects only the no_pressure
---     descriptive share (56.2%), not the ranking. Kept as a robustness
---     result, not merely an assumption.
+--     6.25 ha, and no threshold at all (top-N overlap 10/10, 20/20, 50/50
+--     in every pair). Spearman across all 772 municipalities: 0.9868 for
+--     1 km2 vs 6.25 ha and 0.9866 for 1 km2 vs no threshold. The threshold
+--     affects only the no_pressure descriptive share (54.3%), not the
+--     ranking. Kept as a robustness result, not merely an assumption.
+--     (The previously quoted 0.985 / 56.2% were computed on the 805-
+--     municipality panel, before the Legal Amazon scope filter in
+--     02_marts.sql; recomputed on the 772 panel by the sixth audit.)
 -- (b) DENOMINATOR FLOOR: GREATEST(1, SQRT(LOG(1+n_infractions)
 --     * LOG(1+fine_values))) — a single formula, no branching by
 --     gap_type. absolute_gap is not a separate formula, it is what this

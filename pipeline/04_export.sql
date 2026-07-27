@@ -9,19 +9,24 @@
 --          intermediate caches are not).
 -- Run only after 01-03 have passed their checks.
 --
--- CONFIGURATION — edit the path below to your local project clone
--- (same value as data_root in 01_staging.sql). The output/parquets/
--- folder must already exist on disk — COPY does not create directories.
+-- CONFIGURATION — no path to edit here. Every destination below is built
+-- from getvariable('data_root'), the single configuration point set at the
+-- top of 01_staging.sql; run this file on the same connection (the variable
+-- is session-scoped). The output/parquets/ folder must already exist on
+-- disk — COPY does not create directories.
+-- Note on syntax: COPY ... TO does NOT accept a bare expression, but it does
+-- accept a PARENTHESIZED one — the enclosing ( ... ) around the concatenation
+-- below is required, not decorative.
 ----------------------------------------------------------
 
 COPY project2.analytics.egs_final
-    TO 'C:/Users/diogo/projects/project2/output/parquets/egs_final.parquet' (FORMAT PARQUET);
+    TO (getvariable('data_root') || '/output/parquets/egs_final.parquet') (FORMAT PARQUET);
 
 COPY project2.analytics.egs_ranking
-    TO 'C:/Users/diogo/projects/project2/output/parquets/egs_ranking.parquet' (FORMAT PARQUET);
+    TO (getvariable('data_root') || '/output/parquets/egs_ranking.parquet') (FORMAT PARQUET);
 
 COPY project2.analytics.annual_summary
-    TO 'C:/Users/diogo/projects/project2/output/parquets/annual_summary.parquet' (FORMAT PARQUET);
+    TO (getvariable('data_root') || '/output/parquets/annual_summary.parquet') (FORMAT PARQUET);
 
 ----------------------------------------------------------
 -- == EXPORT CHECK ==
@@ -40,7 +45,7 @@ WITH checks AS (
     FROM (
         SELECT pq.geocode_ibge
         FROM (SELECT geocode_ibge, row_number() OVER () AS rk
-              FROM 'C:/Users/diogo/projects/project2/output/parquets/egs_ranking.parquet') pq
+              FROM read_parquet(getvariable('data_root') || '/output/parquets/egs_ranking.parquet')) pq
         JOIN (SELECT geocode_ibge, row_number() OVER (ORDER BY AVG(egs) DESC, geocode_ibge) AS rk
               FROM project2.analytics.egs_final GROUP BY geocode_ibge) t
         USING (geocode_ibge)

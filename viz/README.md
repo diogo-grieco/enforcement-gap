@@ -35,6 +35,7 @@ All of these are declared as `PATH_*` / `FILE_*` constants at the top of
 ```r
 install.packages(c(
   "tidyverse","sf","arrow","scales",          # 00_setup
+  "geobr","rmapshaper",                        # 00_build_mesh (fetch + simplify)
   "ggrepel","ineq","readr",                    # panels + raw IBAMA
   "fixest","ggridges",                          # panel effects
   "gganimate","gifski",                         # animation
@@ -72,5 +73,5 @@ in `04_raw_ibama.R`, next to the data it's built from, not in `01_maps.R`.
 - **EGS and pct_desmatado are ordinal** — colour by rank-quintile (`q5()`), never a continuous raw value.
 - **Integrity checkpoints** (`N_MUNI`, `N_PANEL`, `N_YEARS`, `N_IBAMA_*`) are declared once in `00_setup.R` and asserted with `stopifnot()` in each script, same as the exploration script.
 - The panel models in `05` reproduce the Python pilot in `fixest` (municipality + year FE, municipality-clustered SEs) — the estimator planned for the thesis.
-- The pipeline's own verification (54 checks across `pipeline/01-04*.sql`) is independent of this suite: no chart here is required for those checks to run.
+- The pipeline's own verification (55 checks across `pipeline/01-04*.sql`) is independent of this suite: no chart here is required for those checks to run.
 - **Charts carry no title/subtitle** (axis labels and legends stay). Each figure's title lives as a numbered heading in the deliverable's own text (e.g. "7.5 Pressão x resposta") instead of being baked into the PNG — avoids duplicating the same text in two places and any font/rendering mismatch between the chart and the document.
