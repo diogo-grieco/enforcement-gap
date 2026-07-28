@@ -66,18 +66,22 @@ tratar os valores antigos como substituídos.
 - Check `out_of_scope_geocodes_prodes` (esperado: 33) em `pipeline/01_staging.sql`:
   vigia a **fonte**, disparando se um download futuro do PRODES mudar quais municípios
   são entregues.
-- Check `missing_legal_amazon_munis` (esperado: **1**) em `pipeline/02_marts.sql`, que
-  documenta um achado novo: **o painel não cobre toda a Amazônia Legal**. Comparando o
-  conjunto de geocodes do PRODES contra a referência do IBGE nos oito estados
-  integralmente contidos na Amazônia Legal, falta exatamente um município —
-  **5101837, Boa Esperança do Norte/MT**, desmembrado de Nova Ubiratã e ausente da
-  malha sobre a qual o PRODES agrega. Ele existe nas outras duas fontes do IBGE usadas
-  aqui (`municipios.json` e o arquivo de áreas territoriais 2025, **4.704,5 km²**).
-  O check `n_geocodes_prodes_clean = 772` não pegava isso porque fixa uma **contagem**,
-  não um **conjunto**: 772 continua batendo, e um município real de quase 4.700 km²
-  simplesmente não tem linha no painel. Consequência para a leitura: "os 772 municípios
-  da Amazônia Legal" deve ser entendido como "os 772 que o PRODES mapeia", não como a
-  divisão municipal vigente. Total de verificações: 54 → 55 → **56**.
+- Check `missing_legal_amazon_munis` (esperado: **1**) em `pipeline/02_marts.sql`.
+  Comparando o **conjunto** de geocodes do PRODES contra a referência do IBGE nos oito
+  estados integralmente contidos na Amazônia Legal, falta um município: **5101837,
+  Boa Esperança do Norte/MT**, desmembrado de Nova Ubiratã em 2025 — novo demais para a
+  malha do PRODES, já presente nas duas fontes do IBGE usadas aqui (4.704,5 km²).
+  O `n_geocodes_prodes_clean` fixa uma **contagem** e não via isso; este fixa o conjunto.
+  A contagem oficial da Amazônia Legal segue 772 e deve passar a 773 numa atualização
+  futura do IBGE. Total de verificações: 54 → 55 → **56**.
+
+  **Consequência conhecida, não corrigida:** o PRODES ainda agrega o território
+  pré-desmembramento em Nova Ubiratã (a série de 2025 não cai: 26,8 km², contra 18,1 em
+  2024), mas o arquivo de áreas do IBGE 2025 já separa os dois. O `pct_desmatado` de
+  Nova Ubiratã divide, portanto, um numerador de malha antiga por um denominador de
+  malha nova: **8,93% publicado contra 5,80%** sobre os 13.425 km² pré-desmembramento.
+  Afeta só esse valor de contexto — o ranking ordena por `avg_egs_18y`, e a mediana, o
+  p75 e o máximo de `pct_desmatado` do painel não mudam.
 - `viz/00_load_ibama_clean.R` passou a ser versionado (era exigido por
   `04_raw_ibama.R` e `07_offender_network.R`, mas estava fora do controle de versão —
   um clone limpo não rodava esses dois scripts).

@@ -204,22 +204,20 @@ WITH checks AS (
     UNION ALL SELECT 'n_municipality_area', CAST(COUNT(*) AS VARCHAR), '5573' FROM project2.marts.municipality_area
     UNION ALL SELECT 'duplicate_area_geocodes', CAST(COUNT(*) AS VARCHAR), '0' FROM (SELECT geocode_ibge FROM project2.marts.municipality_area GROUP BY geocode_ibge HAVING COUNT(*) > 1) d
     UNION ALL SELECT 'missing_area_prodes_to_area', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.staging.prodes_raw p LEFT JOIN project2.marts.municipality_area a ON p.geocode_ibge = a.geocode_ibge WHERE a.geocode_ibge IS NULL
-    -- missing_legal_amazon_munis: expected is 1, not 0 — same idiom as
-    -- invalid_geocode_ibama and out_of_scope_geocodes_prodes: a documented,
-    -- non-zero source anomaly that must not drift silently.
-    -- Counts municipalities that the IBGE localities API places in one of the
-    -- EIGHT states lying ENTIRELY inside the Legal Amazon (MA is excluded: only
-    -- 181 of its 217 municipalities are in it, so a UF-level comparison would
-    -- report 36 false positives) but that the PRODES export does not ship.
-    -- The single missing one is 5101837 Boa Esperança do Norte/MT, created from
-    -- Nova Ubiratã and absent from the mesh PRODES aggregates on — it IS present
-    -- in this project's other two IBGE sources (municipios.json and the 2025
-    -- territorial areas file, 4,704.5 km2). So the panel's 772 is not "every
-    -- Legal Amazon municipality as of today": it is every one PRODES maps, and
-    -- one real municipality of ~4,700 km2 has no row. n_geocodes_prodes_clean
-    -- = 772 cannot catch this (it pins a count, not a set); this check compares
-    -- the SET against the reference table. If a future PRODES download adds it,
-    -- this fires and the expected value — and the panel size — must be revised.
+    -- missing_legal_amazon_munis: expected 1, not 0 — documented source anomaly,
+    -- same idiom as invalid_geocode_ibama and out_of_scope_geocodes_prodes.
+    -- The one missing is 5101837 Boa Esperança do Norte/MT, split off Nova
+    -- Ubiratã in 2025: too new for the PRODES mesh, already in the IBGE sources.
+    -- Restricted to the 8 states fully inside the Legal Amazon — MA is partial
+    -- (181 of 217), so a UF-level compare there would flag 36 false positives.
+    -- n_geocodes_prodes_clean pins a COUNT and cannot see this; this pins the SET.
+    -- KNOWN CONSEQUENCE (not corrected): PRODES still aggregates the pre-split
+    -- territory into Nova Ubiratã, but marts.municipality_area is IBGE 2025 and
+    -- already splits it — so pct_desmatado for 5106240 divides an old-mesh
+    -- numerator by a new-mesh denominator (8.93% published vs 5.80% on the
+    -- 13,425 km2 pre-split area). Affects that one context value only: the
+    -- ranking is ordered by avg_egs_18y, and the panel's median/p75/max
+    -- pct_desmatado are unchanged. Fires if a future download adds the muni.
     UNION ALL SELECT 'missing_legal_amazon_munis', CAST(COUNT(*) AS VARCHAR), '1'
         FROM project2.marts.municipality_ref r
         LEFT JOIN (SELECT DISTINCT geocode_ibge FROM project2.marts.prodes_clean) p
