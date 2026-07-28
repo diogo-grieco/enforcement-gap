@@ -204,6 +204,27 @@ WITH checks AS (
     UNION ALL SELECT 'n_municipality_area', CAST(COUNT(*) AS VARCHAR), '5573' FROM project2.marts.municipality_area
     UNION ALL SELECT 'duplicate_area_geocodes', CAST(COUNT(*) AS VARCHAR), '0' FROM (SELECT geocode_ibge FROM project2.marts.municipality_area GROUP BY geocode_ibge HAVING COUNT(*) > 1) d
     UNION ALL SELECT 'missing_area_prodes_to_area', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.staging.prodes_raw p LEFT JOIN project2.marts.municipality_area a ON p.geocode_ibge = a.geocode_ibge WHERE a.geocode_ibge IS NULL
+    -- missing_legal_amazon_munis: expected is 1, not 0 — same idiom as
+    -- invalid_geocode_ibama and out_of_scope_geocodes_prodes: a documented,
+    -- non-zero source anomaly that must not drift silently.
+    -- Counts municipalities that the IBGE localities API places in one of the
+    -- EIGHT states lying ENTIRELY inside the Legal Amazon (MA is excluded: only
+    -- 181 of its 217 municipalities are in it, so a UF-level comparison would
+    -- report 36 false positives) but that the PRODES export does not ship.
+    -- The single missing one is 5101837 Boa Esperança do Norte/MT, created from
+    -- Nova Ubiratã and absent from the mesh PRODES aggregates on — it IS present
+    -- in this project's other two IBGE sources (municipios.json and the 2025
+    -- territorial areas file, 4,704.5 km2). So the panel's 772 is not "every
+    -- Legal Amazon municipality as of today": it is every one PRODES maps, and
+    -- one real municipality of ~4,700 km2 has no row. n_geocodes_prodes_clean
+    -- = 772 cannot catch this (it pins a count, not a set); this check compares
+    -- the SET against the reference table. If a future PRODES download adds it,
+    -- this fires and the expected value — and the panel size — must be revised.
+    UNION ALL SELECT 'missing_legal_amazon_munis', CAST(COUNT(*) AS VARCHAR), '1'
+        FROM project2.marts.municipality_ref r
+        LEFT JOIN (SELECT DISTINCT geocode_ibge FROM project2.marts.prodes_clean) p
+            ON r.geocode_ibge = p.geocode_ibge
+        WHERE r.uf IN ('RO','AC','AM','RR','PA','AP','TO','MT') AND p.geocode_ibge IS NULL
     UNION ALL SELECT 'n_ipca_annual', CAST(COUNT(*) AS VARCHAR), '18' FROM project2.marts.ipca_annual
     -- ipca_months_not_12 mirrors a check the R side already runs
     -- (exploration/exploring_script.R: stopifnot(all(count(ipca_raw, year)$n

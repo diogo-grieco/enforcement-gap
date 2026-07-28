@@ -65,7 +65,19 @@ tratar os valores antigos como substituídos.
   `CITATION.cff`.
 - Check `out_of_scope_geocodes_prodes` (esperado: 33) em `pipeline/01_staging.sql`:
   vigia a **fonte**, disparando se um download futuro do PRODES mudar quais municípios
-  são entregues. Total de verificações: 54 → **55**.
+  são entregues.
+- Check `missing_legal_amazon_munis` (esperado: **1**) em `pipeline/02_marts.sql`, que
+  documenta um achado novo: **o painel não cobre toda a Amazônia Legal**. Comparando o
+  conjunto de geocodes do PRODES contra a referência do IBGE nos oito estados
+  integralmente contidos na Amazônia Legal, falta exatamente um município —
+  **5101837, Boa Esperança do Norte/MT**, desmembrado de Nova Ubiratã e ausente da
+  malha sobre a qual o PRODES agrega. Ele existe nas outras duas fontes do IBGE usadas
+  aqui (`municipios.json` e o arquivo de áreas territoriais 2025, **4.704,5 km²**).
+  O check `n_geocodes_prodes_clean = 772` não pegava isso porque fixa uma **contagem**,
+  não um **conjunto**: 772 continua batendo, e um município real de quase 4.700 km²
+  simplesmente não tem linha no painel. Consequência para a leitura: "os 772 municípios
+  da Amazônia Legal" deve ser entendido como "os 772 que o PRODES mapeia", não como a
+  divisão municipal vigente. Total de verificações: 54 → 55 → **56**.
 - `viz/00_load_ibama_clean.R` passou a ser versionado (era exigido por
   `04_raw_ibama.R` e `07_offender_network.R`, mas estava fora do controle de versão —
   um clone limpo não rodava esses dois scripts).
@@ -78,7 +90,7 @@ tratar os valores antigos como substituídos.
   DuckDB 1.2.0, abortava com erro fatal nas **86 linhas de 2019–2025 que têm `;`
   dentro de aspas** (códigos de termo de embargo múltiplos). Testado: falha em 1.2.2,
   1.3.2, 1.4.1 e 1.5.5; passava só em ≤ 1.1.3, por sorte do sniffer. Com
-  `quote = '"'` explícito, os 55 checks passam em qualquer versão e a contagem é a
+  `quote = '"'` explícito, os checks passam em qualquer versão e a contagem é a
   mesma (309.116).
 - **Âncora do PRODES 2024.** A validação comparava o painel (6.263 km²) à estimativa
   **preliminar** de 6.288 km², divulgada em nov/2024 e superada pela **taxa
@@ -106,7 +118,7 @@ tratar os valores antigos como substituídos.
 - **Contagem de checks**: o writing sample dizia "55 verificações (7 na ingestão, 26,
   20, 1)", que soma 54. São **8** em staging.
 - **Afirmações sobre o próprio processo**: "quatro auditorias" e "54/54" → seis
-  auditorias e 55 checks, nos três documentos; a tabela de Registro de Mudanças passou
+  auditorias e 56 checks, nos três documentos; a tabela de Registro de Mudanças passou
   a incluir as rodadas 5 e 6.
 - **A frase que dizia que o registro de auditoria "está versionado no repositório"**
   contradizia o `.gitignore` e este próprio arquivo. Reescrita: o resumo está aqui e na

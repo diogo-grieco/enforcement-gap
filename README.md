@@ -115,7 +115,7 @@ Todos os `read_csv`/`read_json_auto` do pipeline usam `getvariable('data_root') 
    04_export.sql     → materializa 3 parquets em output/parquets/
    ```
    No DBeaver: abrir o script, associar à conexão do `project2.duckdb`, `Execute SQL Script` (Alt+X) roda o arquivo inteiro, incluindo o bloco `== CHECKS ==` ao final.
-4. Confira os checks: cada arquivo termina em **uma única query consolidada** que retorna `check_name | actual | expected | status` (55 checks no total, entre os 4 arquivos; falhas aparecem no topo do grid). Qualquer linha com `status = failed` deve ser investigada antes de prosseguir — ver a nota de reprodutibilidade acima antes de assumir que é um bug. A pasta `output/parquets/` precisa existir antes de rodar o `04` (o `COPY` não cria diretórios).
+4. Confira os checks: cada arquivo termina em **uma única query consolidada** que retorna `check_name | actual | expected | status` (56 checks no total, entre os 4 arquivos; falhas aparecem no topo do grid). Qualquer linha com `status = failed` deve ser investigada antes de prosseguir — ver a nota de reprodutibilidade acima antes de assumir que é um bug. A pasta `output/parquets/` precisa existir antes de rodar o `04` (o `COPY` não cria diretórios).
 5. Rode a suíte `viz/` (ver `viz/README.md`) para gerar os gráficos e mapas a partir dos parquets, ou aponte o Power BI para os 3 arquivos em `output/parquets/`.
 6. (Opcional) Rode `exploration/exploring_script.R` para reproduzir, em R, a validação independente das mesmas decisões (filtro de desmatamento, lag do join IBAMA/PRODES, sensibilidade do limiar, EGS reconstruído) — é a checagem cruzada da implementação SQL, não uma etapa obrigatória do pipeline.
 
