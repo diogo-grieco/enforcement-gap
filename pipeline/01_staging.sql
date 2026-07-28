@@ -192,6 +192,12 @@ WITH checks AS (
     -- do Norte/MT (created 2025; see missing_legal_amazon_munis in 02_marts).
     -- The two numbers match because both predate that municipality, so treat
     -- the equality as a coincidence worth watching, not as confirmation.
+    -- Root cause of the 33 NOT established. Ruled out: the pre-1988 "Goiás
+    -- north of 13°S" definition (Mineiros/GO sits at 17.6°S), and the "all
+    -- municipalities of the 9 states" criterion sometimes cited (that would be
+    -- 809, and this export cuts MA at 181 of 217). Best read as an unreconciled
+    -- mismatch between the PRODES municipal layer and the IBGE delimitation —
+    -- a fact to filter, not a criterion to reproduce.
     -- 02_marts.sql filters the 33 out of prodes_clean by geocode prefix.
     -- This check watches the SOURCE, not the filter (a check on prodes_clean
     -- would be tautological — the WHERE there guarantees 0 by construction;
