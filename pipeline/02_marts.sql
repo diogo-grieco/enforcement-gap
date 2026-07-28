@@ -71,8 +71,10 @@ WHERE
 --   labelled "legal_amazon" ships 805 geocodes, but 33 of them are in
 --   states OUTSIDE the Legal Amazon — GO (18), PI (6), MS (5), BA (4) —
 --   each with area_km2 = 0 in every one of the 18 years (they carry no
---   PRODES-mapped deforestation). 805 - 33 = 772, exactly the official
---   Legal Amazon municipality count. We keep only the 9 Legal Amazon
+--   PRODES-mapped deforestation). 805 - 33 = 772, the CURRENT official Legal
+--   Amazon count — due to become 773 (see missing_legal_amazon_munis below);
+--   both figures predate Boa Esperança do Norte/MT, so the match is a
+--   coincidence to watch, not a confirmation. We keep only the 9 Legal Amazon
 --   state prefixes so the panel matches its declared universe; the 33
 --   zero-deforestation out-of-scope rows were inflating the descriptive
 --   "no pressure" share (and surfaced non-Legal-Amazon states in the

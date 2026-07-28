@@ -187,8 +187,12 @@ WITH checks AS (
     -- invalid_geocode_ibama above. The TerraBrasilis export labelled
     -- "legal_amazon" ships 805 municipalities, but 33 of them sit in states
     -- OUTSIDE the Legal Amazon (GO 18, PI 6, MS 5, BA 4), each with
-    -- area = 0 in all 18 years. 805 - 33 = 772, the official Legal Amazon
-    -- count; 02_marts.sql filters them out of prodes_clean by geocode prefix.
+    -- area = 0 in all 18 years. 805 - 33 = 772, the CURRENT official Legal
+    -- Amazon count — which should become 773 once IBGE takes in Boa Esperança
+    -- do Norte/MT (created 2025; see missing_legal_amazon_munis in 02_marts).
+    -- The two numbers match because both predate that municipality, so treat
+    -- the equality as a coincidence worth watching, not as confirmation.
+    -- 02_marts.sql filters the 33 out of prodes_clean by geocode prefix.
     -- This check watches the SOURCE, not the filter (a check on prodes_clean
     -- would be tautological — the WHERE there guarantees 0 by construction;
     -- n_geocodes_prodes_clean = 772 already guards that side). If a future
