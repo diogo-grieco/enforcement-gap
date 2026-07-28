@@ -1,4 +1,4 @@
-# IBAMA — autos de infração (versão pública, sem PII)
+# IBAMA, autos de infração (versão pública, sem PII)
 
 Derivado do dado bruto do IBAMA (`data/data_ibama/`, não versionado, contém
 nome e CPF/CNPJ do autuado). Esta pasta mantém, de cada CSV anual, apenas as
@@ -16,12 +16,12 @@ COD_INFRACAO, CPF_CNPJ_INFRATOR, VAL_AUTO_INFRACAO
 `CPF_CNPJ_INFRATOR` é substituído por um **identificador substituto aleatório
 e estável**: `pid_` + 16 dígitos hexadecimais sorteados, um por autuado. O mapa
 `CPF/CNPJ → pid_` é construído uma única vez (global, cobrindo todos os anos),
-preserva igualdade (mesmo autuado, mesmo `pid_`, em qualquer ano) — então toda
+preserva igualdade (mesmo autuado, mesmo `pid_`, em qualquer ano). Toda
 contagem que depende de identidade de autuado (curva de Lorenz da concentração
 de multas, rede de infratores multi-município) é idêntica ao dado original.
 
 Diferente de um hash do próprio CPF/CNPJ, o substituto **não é derivado do
-valor original**: é aleatório. Por isso **o `pid_` não é reversível** — não há
+valor original**: é aleatório. Por isso **o `pid_` não é reversível**: não há
 salt nem função conhecida que, aplicada a um CPF candidato, reproduza o `pid_`.
 O mapa que permitiria a reversão é mantido **apenas localmente e nunca
 versionado**.
@@ -43,7 +43,7 @@ CD_TERMOS_APREENSAO presente em 25,0% das linhas (nº de termo público)
 ```
 
 Ou seja: quem baixar os mesmos CSVs de `dadosabertos.ibama.gov.br` e fizer um
-join por essas colunas recupera nome e CPF/CNPJ para a maior parte das linhas —
+join por essas colunas recupera nome e CPF/CNPJ para a maior parte das linhas
 e, por transitividade, o mapa `pid_ → CPF/CNPJ`.
 
 Isso é consequência do desenho, não falha dele. O objetivo do `pid_` é permitir
@@ -95,12 +95,11 @@ for f in files:
         lambda v: mapping.get(v) if pd.notna(v) else v)
     df.to_csv(DST / f.name, sep=";", index=False, encoding="utf-8")
 
-# 3) o mapa NÃO é salvo — a reversão fica impossível a partir do repositório
+# 3) o mapa NÃO é salvo: a reversão fica impossível a partir do repositório
 del mapping
 ```
 
 Para reprocessar com dados IBAMA mais recentes: baixe os novos CSVs para
 `data/data_ibama/`, rode o script acima, e siga o pipeline normalmente a
-partir de `data/data_ibama_public/`. (Rodar de novo gera `pid_` diferentes —
-o mapa é aleatório e efêmero; isso não afeta nenhuma contagem, que depende
+partir de `data/data_ibama_public/`. (Rodar de novo gera `pid_` diferentes: o mapa é aleatório e efêmero; isso não afeta nenhuma contagem, que depende
 só de igualdade preservada.)

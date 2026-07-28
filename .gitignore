@@ -22,3 +22,6 @@ output/parquets/viz_*.parquet
 
 # material interno do processo de pesquisa — não faz parte do repositório público
 references/
+
+# registro de mudanças — documentação interna de desenvolvimento
+CHANGELOG.md
