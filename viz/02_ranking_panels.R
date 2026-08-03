@@ -49,7 +49,7 @@ p_top20_egs <- ggplot(top20, aes(x = avg_egs_18y, y = municipality_name)) +
   geom_col(fill = "#2e6e54", width = 0.7) +
   geom_text(aes(label = number(avg_egs_18y, accuracy = 0.001)), hjust = -0.15, size = 3) +
   scale_x_continuous(expand = expansion(mult = c(0, 0.15)), labels = number) +
-  labs(x = "avg_egs_18y", y = NULL) +
+  labs(x = "EGS médio (18 anos)", y = NULL) +
   theme_chart
 
 # 18-year composition (absolute / measured / no_pressure years, sums to 18).
@@ -115,7 +115,8 @@ p_scatter <- ggplot(scatter_df, aes(x = total_desmatado_km2, y = total_fines_plo
   # the deliverables across reruns. set.seed() before the plot would NOT work.
   geom_text_repel(data = anchors, aes(label = municipality_name),
                   size = 3, min.segment.length = 0, seed = 42) +
-  labs(caption = "Pontos com multas zeradas (129/772) fixados em R$ 1.000 para permanecer na escala log.",
+  labs(caption = paste("Multas zeradas (129/772) fixadas em R$ 1.000 para permanecer na escala log;",
+                       "os 131 municípios sem desmatamento no período não aparecem (log de zero).", sep = "\n"),
        x = "Total desmatado (km², log)", y = "Total de multas (R$ deflacionado, log)") +
   theme_chart +
   theme(legend.position = "right")
@@ -136,7 +137,7 @@ p_quadrant <- ggplot(ranking, aes(x = avg_egs_18y, y = avg_egs_3y)) +
   scale_y_continuous(labels = number) +
   geom_text_repel(data = ranking %>% slice_max(avg_egs_18y, n = 8),   # seed: see item 5 above
                   aes(label = municipality_name), size = 3, min.segment.length = 0, seed = 42) +
-  labs(x = "avg_egs_18y (histórico)", y = "avg_egs_3y (2023-25)") +
+  labs(x = "EGS médio histórico (2008–2025)", y = "EGS médio recente (2023–2025)") +
   theme_chart
 
 # -----------------------------------------------------------------------------

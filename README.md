@@ -98,6 +98,8 @@ SET VARIABLE data_root = 'C:/Users/diogo/projects/project2';  -- editar aqui
 
 Todos os `read_csv`/`read_json_auto` do pipeline usam `getvariable('data_root') || '/...'`, **inclusive os `COPY ... TO` e o check de `04_export.sql`**, essa linha é, de fato, a única que precisa ser editada em todo o pipeline. Como a variável é de sessão, rode os quatro arquivos na mesma conexão (no DBeaver: mesma aba/conexão do `project2.duckdb`).
 
+**Versão do motor.** O pipeline foi rodado e verificado em DuckDB 1.5.x (pacote R `duckdb` 1.5.4.3 e CLI 1.5.5). O `quote = '"'` declarado no `read_csv` do IBAMA em `01_staging.sql` é o que torna a leitura independente da versão: sem ele, DuckDB a partir de 1.2.0 aborta em 86 linhas que trazem `;` dentro de aspas.
+
 ---
 
 ## Como rodar
@@ -123,15 +125,15 @@ Todos os `read_csv`/`read_json_auto` do pipeline usam `getvariable('data_root') 
 
 ## Datas de download e reprodutibilidade
 
-Os valores esperados nos blocos de check (`n_ibama = 60707`, `total_fines = 26814492927`, `n_absolute_gap = 3063`, etc.) são uma fotografia dos dados na data em que foram baixados, **não são invariantes da fonte**. IBAMA revisa retroativamente seus CSVs de autos de infração (cancelamentos, correções, novos registros); PRODES publica estimativa preliminar e consolida o ano mais recente meses depois. Quem baixar os dados de novo, hoje ou no futuro, pode ver checks `failed` sem que haja bug algum no pipeline, só dado mais recente que o snapshot documentado aqui.
+Os valores esperados nos blocos de check (`n_ibama = 60707`, `total_fines = 26814492927`, `n_absolute_gap = 3063`, etc.) são uma fotografia dos dados na data em que foram baixados, **não são invariantes da fonte**. IBAMA pode revisar retroativamente seus CSVs de autos de infração (cancelamentos, correções, novos registros); PRODES publica estimativa preliminar e consolida o ano mais recente meses depois. Quem baixar os dados de novo, hoje ou no futuro, pode ver checks `failed` sem que haja bug algum no pipeline, só dado mais recente que o snapshot documentado aqui.
 
 | Fonte | Data do snapshot usado | Observação |
 |---|---|---|
 | PRODES (`data/data_prodes/`) | 25/04/2026 (no próprio nome do arquivo) | 2025 é o ano mais recente do painel e pode não estar consolidado; ver nota "último ano sujeito a revisão" |
-| IBAMA (`data/data_ibama_public/`) | **não registrada** | O nome dos arquivos (`auto_infracao_ano_*.csv`) não carrega data de download; anote a data manualmente ao baixar de novo |
+| IBAMA (`data/data_ibama_public/`) | 25/04/2026 | O nome dos arquivos (`auto_infracao_ano_*.csv`) não carrega a data de download; ela fica registrada aqui e na tabela de fontes do relatório estendido |
 | IBGE, referência (`municipios.json`) | 12/07/2026 | Download manual via navegador (API não respondeu de forma confiável neste projeto) |
-| IBGE (áreas territoriais (`municipality_area_2025.csv`) | 20/07/2026 | Convertido de `.xls` para CSV) ver nota de delimitador em `01_staging.sql` |
-| IBGE/Sidra (IPCA | 10/07/2026 (no próprio nome do arquivo) |) |
+| IBGE, áreas territoriais (`municipality_area_2025.csv`) | 20/07/2026 | Convertido de `.xls` para CSV; ver nota de delimitador em `01_staging.sql` |
+| IBGE/Sidra, IPCA | 10/07/2026 (no próprio nome do arquivo) | Série Brasil, tabela 1737, variável 2266, formato largo |
 
 Antes de comparar um check `failed` com o pipeline, confirme se algum dos 5 arquivos foi rebaixado depois dessas datas. Se sim, o esperado do check é o que precisa ser atualizado, não o SQL.
 
@@ -139,32 +141,7 @@ Antes de comparar um check `failed` com o pipeline, confirme se algum dos 5 arqu
 
 ## `.gitignore`
 
-```
-# RStudio
-.Rproj.user
-.Rhistory
-.RData
-.Ruserdata
-
-# banco DuckDB local, binário do CLI, write-ahead log (grandes, regeneráveis
-project2.duckdb
-duckdb.exe
-*.wal
-
-# caches intermediários da suíte viz/) regenerados no primeiro run local
-output/parquets/viz_*.parquet
-
-# dado bruto do IBAMA com identificação do autuado, nunca publicizado
-# (a versão sem PII, data/data_ibama_public/, É versionada)
-data/data_ibama/
-
-# malha antes da simplificação; artefato intermediário, regenerado por
-# viz/00_build_mesh.R (só a versão simplificada é lida por viz/)
-data/data_ibge/malha_772_amazonia_legal.geojson
-
-# material interno do processo de pesquisa, não faz parte do repositório público
-references/
-```
+O arquivo [`.gitignore`](.gitignore) na raiz é a fonte única; cada regra traz no próprio arquivo o comentário que a justifica. Em resumo, ficam de fora: artefatos do RStudio; o banco `project2.duckdb`, o binário do CLI e os `.wal`; o dado bruto do IBAMA com identificação do autuado (`data/data_ibama/`); a malha antes da simplificação; os caches intermediários da suíte `viz/`; e o material interno do processo de pesquisa (`references/`, `CHANGELOG.md`).
 
 Dados brutos (`data/data_prodes/`, `data/data_ibama_public/`, `data/data_ibge/`, `data/data_ipca/`) e os parquets finais (`output/parquets/`) são versionados: é o que torna o repositório reprodutível a partir de um clone limpo, sem depender de um download externo. `output/visualizations/` e `deliverables/` também são versionados, os resultados e os textos finais ficam legíveis direto no GitHub, além do depósito com DOI no Zenodo/preprint.
 
@@ -180,10 +157,10 @@ Mudanças de substância entre versões, incluindo as que alteraram números pub
 
 ## Documentação do projeto
 
-- `deliverables/EGMS_01_resumo_executivo.docx` (síntese de 2 a 3 páginas.
-- `deliverables/EGMS_02_writing_sample.docx`) texto autoral completo: decisões metodológicas, validação, resultados, limites.
-- `deliverables/EGMS_03_relatorio_estendido.docx` (apêndice técnico completo (todas as decisões com o teste empírico correspondente).
-- `viz/README.md`) como rodar a suíte de visualização.
+- `deliverables/EGMS_01_resumo_executivo.docx`: síntese de 2 a 3 páginas.
+- `deliverables/EGMS_02_writing_sample.docx`: texto autoral completo, com decisões metodológicas, validação, resultados e limites.
+- `deliverables/EGMS_03_relatorio_estendido.docx`: apêndice técnico completo, com todas as decisões e o teste empírico correspondente.
+- `viz/README.md`: como rodar a suíte de visualização.
 
 ---
 

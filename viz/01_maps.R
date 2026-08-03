@@ -65,7 +65,7 @@ pin_layer <- geom_sf(data = top20_pts, shape = 21, fill = "#2e6e54",
 
 m_defor_pct <- ggplot(map_data) +
   geom_sf(aes(fill = q_defor_pct), colour = "white", linewidth = 0.05) +
-  scale_fill_manual(values = QUINTILE_PALETTE, name = "Quintil\npct_desmatado") +
+  scale_fill_manual(values = QUINTILE_PALETTE, name = "Quintil de\n% desmatado") +
   pin_layer +
   theme_map
 
@@ -77,7 +77,7 @@ m_defor_pct <- ggplot(map_data) +
 
 m_defor_abs <- ggplot(map_data) +
   geom_sf(aes(fill = q_defor_abs), colour = "white", linewidth = 0.05) +
-  scale_fill_manual(values = QUINTILE_PALETTE, name = "Quintil\ntotal_desmatado_km2") +
+  scale_fill_manual(values = QUINTILE_PALETTE, name = "Quintil de\ndesmatamento (km²)") +
   pin_layer +
   theme_map
 
@@ -87,7 +87,7 @@ m_defor_abs <- ggplot(map_data) +
 
 m_egs <- ggplot(map_data) +
   geom_sf(aes(fill = q_egs), colour = "white", linewidth = 0.05) +
-  scale_fill_manual(values = QUINTILE_PALETTE, name = "Quintil\navg_egs_18y") +
+  scale_fill_manual(values = QUINTILE_PALETTE, name = "Quintil de\nEGS médio (18 anos)") +
   pin_layer +
   theme_map
 
@@ -102,7 +102,7 @@ bubble_pts <- suppressWarnings(st_centroid(map_data))
 
 m_bivariate <- ggplot(map_data) +
   geom_sf(aes(fill = q_defor_pct), colour = "white", linewidth = 0.05) +
-  scale_fill_manual(values = QUINTILE_PALETTE, name = "Quintil\npct_desmatado") +
+  scale_fill_manual(values = QUINTILE_PALETTE, name = "Quintil de\n% desmatado") +
   geom_sf(data = bubble_pts, aes(size = total_fines),
           shape = 21, fill = "#4a5d8a2e", colour = "#4a5d8a",
           stroke = 0.4, inherit.aes = FALSE) +

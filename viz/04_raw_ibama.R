@@ -80,7 +80,9 @@ p_cancel_year <- ggplot(cancel_year, aes(x = year, y = rate)) +
   geom_line(colour = "#a63d2f", linewidth = 1) +
   geom_point(colour = "#a63d2f") +
   scale_y_continuous(labels = percent) +
-  annotate("text", x = 2018, y = max(cancel_year$rate),
+  # a anotacao ficava sob o pico da serie; ancorada a esquerda da faixa e no
+  # topo do painel para nao colidir com os pontos de 2017-2019.
+  annotate("text", x = 2016.2, y = max(cancel_year$rate), hjust = 1, vjust = 0.5,
            label = "2017-2019\npico de cancelamento", size = 3, colour = "#6b756d") +
   labs(x = NULL, y = "Taxa de cancelamento") +
   theme_chart

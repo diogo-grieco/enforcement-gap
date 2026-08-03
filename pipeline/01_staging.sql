@@ -71,7 +71,9 @@ SELECT * FROM read_csv(
 -- 1.2.0 on, strict_mode turns the same guess into a hard abort
 -- ("CSV Error on Line: 14421 ... Expected Number of Columns: 13 Found: 14").
 -- Declaring the quote character makes the read independent of both the
--- sniffer's sample and the DuckDB version. Row count is 309,116 either way.
+-- sniffer's sample and the DuckDB version. Where the read succeeds at all,
+-- the row count is 309,116 with or without it; without it, DuckDB >= 1.2.0
+-- aborts and there is no count.
 -- Granularity: infraction notice | Expected: 309,116 x 13
 ----------------------------------------------------------
 

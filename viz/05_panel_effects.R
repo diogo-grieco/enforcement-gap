@@ -73,7 +73,7 @@ m5 <- feols(log_infra_f1 ~ d_pos + d_pos:high_capacity + d_neg + log_area + log_
             data = panel %>% filter(year >= 2017), cluster = ~geocode_ibge)  # capacity
 
 # m2f: same specification as m2 with the FINE as the outcome instead of the
-# notice count. The extended report cites its coefficient (-0.401) alongside
+# notice count. The extended report cites its coefficient (-0.399) alongside
 # m2's (-0.057); until the sixth audit this model existed only in the write-up,
 # not in the code — log_fine_f1 was built above and never used, so the published
 # number could not be reproduced from this repository. It is not plotted (item
