@@ -137,6 +137,8 @@ Os valores esperados nos blocos de check (`n_ibama = 60707`, `total_fines = 2681
 
 Antes de comparar um check `failed` com o pipeline, confirme se algum dos 5 arquivos foi rebaixado depois dessas datas. Se sim, o esperado do check é o que precisa ser atualizado, não o SQL.
 
+O mesmo contrato vale para a suíte `viz/`. Os números que os relatórios publicam e que nascem na camada R (o índice de Gini e a população sobre a qual é calculado, a base das figuras de cancelamento, a mediana da defasagem, os coeficientes de painel e do event study) estão fixados como constantes `PUB_*` no script que os produz, asseridas com `stopifnot()` logo abaixo do cálculo. São fotografias do mesmo snapshot, não invariantes: se um deles falhar depois de rebaixar dados, o que precisa ser atualizado é o esperado **e o texto que o publica**, não o código. Rode `grep "^PUB_" viz/*.R` para ver o inventário completo do que os deliverables assumem.
+
 ---
 
 ## `.gitignore`

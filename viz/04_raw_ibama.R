@@ -55,6 +55,18 @@ lorenz <- offender_totals %>%
 
 gini <- ineq::ineq(offender_totals$total_fine, type = "Gini")
 
+# Valores PUBLICADOS (writing sample fig. 5; estendido fig. 7). A populacao NAO e
+# obvia a partir da legenda: e `clean` (autos de desmatamento nos 772 municipios,
+# nao cancelados, "Lavrado"), com CPF/CNPJ nao nulo e multa > 0. Fixar o n aqui e
+# o que impede a legenda de descrever uma populacao e o numero vir de outra.
+PUB_N_OFFENDERS <- 32836
+PUB_GINI        <- 0.801
+
+stopifnot(
+  "lorenz: n de autuados mudou"        = nrow(offender_totals) == PUB_N_OFFENDERS,
+  "lorenz: Gini publicado nao confere" = round(gini, 3) == PUB_GINI
+)
+
 p_lorenz <- ggplot(lorenz, aes(x = cum_offenders, y = cum_fine)) +
   geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey60") +
   geom_line(colour = "#7c4a20", linewidth = 1) +
@@ -73,6 +85,19 @@ cancel_year <- defor %>%
   filter(!is.na(year)) %>%
   group_by(year) %>%
   summarise(rate = mean(SIT_CANCELADO == "S", na.rm = TRUE), n = n(), .groups = "drop")
+
+# Valores PUBLICADOS (writing sample fig. 6; estendido figs. 8 e 9). A base e
+# `defor`, em QUALQUER situacao: a taxa exige incluir os cancelados, e por isso
+# nao e comparavel aos 60.707 do pipeline. O pico 2017-2019 e afirmado em prosa
+# nos dois documentos; a guarda fixa o CONJUNTO dos tres anos, nao a taxa.
+PUB_N_CANCEL_BASE <- 48063
+PUB_CANCEL_PEAK   <- c(2017, 2018, 2019)
+
+stopifnot(
+  "cancelamento: base publicada mudou" = nrow(defor) == PUB_N_CANCEL_BASE,
+  "cancelamento: o pico deixou de ser 2017-2019" =
+    setequal(cancel_year$year[order(-cancel_year$rate)][1:3], PUB_CANCEL_PEAK)
+)
 
 p_cancel_year <- ggplot(cancel_year, aes(x = year, y = rate)) +
   annotate("rect", xmin = 2016.5, xmax = 2019.5, ymin = -Inf, ymax = Inf,
@@ -93,6 +118,11 @@ cancel_uf <- defor %>%
   filter(n >= 100) %>%
   mutate(UF = fct_reorder(UF, rate))
 
+# PUBLICADO (estendido fig. 9): so UFs com >= 100 autos. As 9 sao exatamente os
+# estados da Amazonia Legal; ate a quinta auditoria apareciam UFs de fora aqui.
+PUB_N_UF_CANCEL <- 9
+stopifnot("cancelamento por UF: n de estados mudou" = nrow(cancel_uf) == PUB_N_UF_CANCEL)
+
 p_cancel_uf <- ggplot(cancel_uf, aes(x = rate, y = UF)) +
   geom_col(fill = "#a63d2f", width = 0.7) +
   scale_x_continuous(labels = percent) +
@@ -109,6 +139,16 @@ lag_df <- clean %>%
   filter(!is.na(dt_fact), !is.na(dt_notice)) %>%
   mutate(lag_days = as.integer(dt_notice - dt_fact)) %>%
   filter(lag_days >= -30, lag_days <= 3650)   # trim clear data-entry outliers
+
+# Valores PUBLICADOS (estendido fig. 10 e §8.10: "mediana 7 dias", "~28% do total").
+# O denominador dos 28% e `clean` (43.576), nao os 60.707 do pipeline.
+PUB_LAG_MEDIAN <- 7
+PUB_N_LAG_PLOT <- 12136
+
+stopifnot(
+  "lag: mediana publicada mudou"    = median(lag_df$lag_days) == PUB_LAG_MEDIAN,
+  "lag: n da amostra parcial mudou" = nrow(lag_df) == PUB_N_LAG_PLOT
+)
 
 p_lag <- ggplot(lag_df, aes(x = lag_days)) +
   geom_histogram(binwidth = 30, fill = "#c98a3d", colour = "white") +

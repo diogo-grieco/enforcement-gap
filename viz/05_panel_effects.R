@@ -83,6 +83,45 @@ m2f <- feols(log_fine_f1 ~ d_log_area + log_area | geocode_ibge + year,
 
 etable(m1, m2, m2f, m3, m4, m5)   # full tables to console for the write-up
 
+# ---------------------------------------------------------------------------
+# Valores PUBLICADOS no relatorio estendido, secao 5.5, na precisao em que o
+# texto os publica. Ate a setima auditoria esta camada nao tinha guarda nenhuma,
+# e por isso um coeficiente do piloto anterior em Python sobreviveu a migracao
+# para o fixest e foi publicado: o modo de falha que a secao 7 do relatorio
+# nomeia ("numeros em prosa derivam; numeros em checks, nao"). A comparacao e
+# por igualdade sobre o valor ARREDONDADO, porque o que se protege e a frase
+# publicada, nao o coeficiente.
+# ---------------------------------------------------------------------------
+PUB_M1_LOG_AREA    <-  0.080 ; PUB_M1_LOG_AREA_L1 <- 0.056
+PUB_M2_D_LOG_AREA  <- -0.057
+PUB_M2F_D_LOG_AREA <- -0.399
+PUB_M3_D_LOG_AREA  <- -0.069   # valor bruto -0.06852515: a 2.5e-5 da fronteira de
+                               # arredondamento. Se ESTE check falhar sozinho, confira
+                               # o valor bruto antes de concluir que o dado mudou.
+PUB_M4_D_POS       <- -0.114 ; PUB_M4_D_POS_SE    <- 0.032
+PUB_M4_D_NEG       <- -0.005
+PUB_M5_D_POS_HICAP <- -0.121
+PUB_N_OBS <- c(m1 = 13124, m2 = 12352, m2f = 12352, m3 = 11580,
+               m4 = 12352, m5 = 6176, es = 10036)
+
+.cf <- function(m, term) unname(coef(m)[term])
+.se <- function(m, term) unname(summary(m)$coeftable[term, "Std. Error"])
+
+stopifnot(
+  "m1: log_area publicado mudou"     = round(.cf(m1, "log_area"),    3) == PUB_M1_LOG_AREA,
+  "m1: log_area_l1 publicado mudou"  = round(.cf(m1, "log_area_l1"), 3) == PUB_M1_LOG_AREA_L1,
+  "m2: d_log_area publicado mudou"   = round(.cf(m2, "d_log_area"),  3) == PUB_M2_D_LOG_AREA,
+  "m2f: d_log_area publicado mudou"  = round(.cf(m2f,"d_log_area"),  3) == PUB_M2F_D_LOG_AREA,
+  "m3: d_log_area publicado mudou"   = round(.cf(m3, "d_log_area"),  3) == PUB_M3_D_LOG_AREA,
+  "m4: d_pos publicado mudou"        = round(.cf(m4, "d_pos"),       3) == PUB_M4_D_POS,
+  "m4: EP de d_pos publicado mudou"  = round(.se(m4, "d_pos"),       3) == PUB_M4_D_POS_SE,
+  "m4: d_neg publicado mudou"        = round(.cf(m4, "d_neg"),       3) == PUB_M4_D_NEG,
+  "m5: interacao publicada mudou"    = round(.cf(m5, "d_pos:high_capacity"), 3) == PUB_M5_D_POS_HICAP,
+  "observacoes de m1-m5 mudaram"     =
+    all(vapply(list(m1, m2, m2f, m3, m4, m5), nobs, numeric(1)) ==
+        PUB_N_OBS[c("m1","m2","m2f","m3","m4","m5")])
+)
+
 # -----------------------------------------------------------------------------
 #### 15 — coefficient plot
 # -----------------------------------------------------------------------------
@@ -159,6 +198,20 @@ event_path <- function(model, outcome) {
              estimate = ct[, "Estimate"],
              se       = ct[, "Std. Error"], row.names = NULL)
 }
+# Valores PUBLICADOS na Tabela 4 do relatorio estendido. Esta e a guarda que
+# teria pego o erro: seis dos dez coeficientes publicados nao saiam deste modelo.
+PUB_ES_TERMS  <- c("dpos_lead2","dpos_lead1","dpos_lag0","dpos_lag1","dpos_lag2")
+PUB_ES_AUTOS  <- c( 0.036, -0.001, -0.063, -0.034, -0.015)
+PUB_ES_MULTAS <- c( 0.196,  0.071, -0.212,  0.000,  0.144)
+
+stopifnot(
+  "event study (autos): a Tabela 4 nao sai deste modelo" =
+    all(round(unname(coef(es_autos)[PUB_ES_TERMS]), 3) == PUB_ES_AUTOS),
+  "event study (multas): a Tabela 4 nao sai deste modelo" =
+    all(round(unname(coef(es_fine)[PUB_ES_TERMS]),  3) == PUB_ES_MULTAS),
+  "event study: observacoes mudaram" = nobs(es_autos) == PUB_N_OBS[["es"]]
+)
+
 es_df <- bind_rows(event_path(es_autos, "autos"),
                    event_path(es_fine,  "multas (deflacionadas)")) %>%
   mutate(lo = estimate - 1.96 * se, hi = estimate + 1.96 * se)

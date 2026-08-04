@@ -80,14 +80,31 @@ p_top20_comp <- ggplot(top20_comp, aes(x = years, y = municipality_name, fill = 
 # diagonal = proportional response; below it = enforcement gap. Colour =
 # dominant gap type; anchor cases labelled.
 
+# Valores PUBLICADOS na legenda desta figura (writing sample fig. 1; estendido
+# fig. 5). Mesma natureza dos esperados do pipeline SQL: fotografia do snapshot,
+# nao invariante da fonte. A legenda e montada a partir destas constantes, para
+# que texto e dado nao possam divergir.
+PUB_N_ZERO_FINES <- 129   # municipios sem multa: pisados em R$ 1.000 (eixo y)
+PUB_N_ZERO_DEFOR <- 133   # municipios sem desmatamento: ausentes (log de zero, eixo x).
+                          # Conta sobre a coluna do parquet, que e ROUND(SUM(area),1):
+                          # 131 tem soma exatamente zero e 2 arredondam para zero. Quem
+                          # some do grafico sao os 133, porque e a coluna que o eixo le.
+
+stopifnot(
+  "log-log: n de municipios sem multa mudou"       = sum(ranking$total_fines == 0)         == PUB_N_ZERO_FINES,
+  "log-log: n de municipios sem desmatamento mudou"= sum(ranking$total_desmatado_km2 == 0) == PUB_N_ZERO_DEFOR
+)
+
 scatter_df <- ranking %>%
   mutate(dominant = case_when(
            n_absolute_gap >= n_measured_gap & n_absolute_gap >= n_no_pressure ~ "absolute_gap",
            n_measured_gap >= n_no_pressure                                    ~ "measured_gap",
            TRUE                                                               ~ "no_pressure"),
          dominant = factor(dominant, levels = c("absolute_gap","measured_gap","no_pressure")),
-         # 129/772 municipalities have total_fines == 0 (never fined); floored to
-         # 1000 so they still plot on the log axis instead of vanishing at -Inf.
+         # PUB_N_ZERO_FINES municipalities have total_fines == 0 (never fined);
+         # floored to 1000 so they still plot instead of vanishing at -Inf.
+         # PUB_N_ZERO_DEFOR have zero deforestation and DO vanish (x = log of 0):
+         # not floored, because a floor on the pressure axis would invent pressure.
          total_fines_plot = pmax(total_fines, 1000))
 
 ANCHOR_NAMES <- c("Apuí", "Cumaru do Norte", "Cachoeira do Piriá",
@@ -115,8 +132,11 @@ p_scatter <- ggplot(scatter_df, aes(x = total_desmatado_km2, y = total_fines_plo
   # the deliverables across reruns. set.seed() before the plot would NOT work.
   geom_text_repel(data = anchors, aes(label = municipality_name),
                   size = 3, min.segment.length = 0, seed = 42) +
-  labs(caption = paste("Multas zeradas (129/772) fixadas em R$ 1.000 para permanecer na escala log;",
-                       "os 131 municípios sem desmatamento no período não aparecem (log de zero).", sep = "\n"),
+  labs(caption = paste(
+         sprintf("Multas zeradas (%d/%d) fixadas em R$ 1.000 para permanecer na escala log;",
+                 PUB_N_ZERO_FINES, N_MUNI),
+         sprintf("os %d municípios sem desmatamento no período não aparecem (log de zero).",
+                 PUB_N_ZERO_DEFOR), sep = "\n"),
        x = "Total desmatado (km², log)", y = "Total de multas (R$ deflacionado, log)") +
   theme_chart +
   theme(legend.position = "right")
@@ -135,6 +155,13 @@ p_quadrant <- ggplot(ranking, aes(x = avg_egs_18y, y = avg_egs_3y)) +
   scale_size_continuous(range = c(0.5, 5), name = "Anos de pressão") +
   scale_x_continuous(labels = number) +
   scale_y_continuous(labels = number) +
+  # order: with two guides and neither declaring an order, ggplot2 does not
+  # guarantee a stable arrangement between sessions — the seventh audit caught
+  # the colour and size legends swapping places on a rerun, with no data change,
+  # which silently breaks the byte-identity between the PNG on disk and the one
+  # embedded in the deliverables. Colour first: it is the primary encoding and
+  # the one the caption refers to (above the identity line = piorando).
+  guides(colour = guide_legend(order = 1), size = guide_legend(order = 2)) +
   geom_text_repel(data = ranking %>% slice_max(avg_egs_18y, n = 8),   # seed: see item 5 above
                   aes(label = municipality_name), size = 3, min.segment.length = 0, seed = 42) +
   labs(x = "EGS médio histórico (2008–2025)", y = "EGS médio recente (2023–2025)") +
