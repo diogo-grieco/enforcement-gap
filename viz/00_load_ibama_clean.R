@@ -5,7 +5,7 @@
 # Author: Diogo Grieco
 #
 # Purpose: Single source of truth for reading + filtering the raw IBAMA CSVs,
-#          shared by 04_raw_ibama.R (items 11-14, 17) and 07_offender_network.R
+#          shared by 04_raw_ibama.R (report figures 7-11) and 06_offender_network.R
 #          (item 18) — both need the same deforestation-type filter over the
 #          same raw notices, and keeping one copy of that filter means the two
 #          scripts can't silently drift apart if it's ever revised.

@@ -7,28 +7,20 @@
 #
 # Purpose: Visuals from the RAW IBAMA CSVs (items 11-14, 17), and the cached
 #          intermediate that the offender network (07) also reads.
-#            11 Lorenz curve of fine concentration across offenders
-#            12 cancellation-rate series (2017-2019 spike) + by state
-#            13 histogram of the fact -> notice lag (long tail; axis label
+#            7     Lorenz curve of fine concentration across offenders
+#            8, 9  cancellation-rate series (2017-2019 spike) + by state
+#            10    histogram of the fact -> notice lag (long tail; axis label
 #               uses the arrow glyph, not ASCII "->")
-#            14 embargo/apreensão share by EGS quintile
-#            17 choropleth: auto cancellation rate by municipality
+#            11    embargo/apreensão share by EGS quintile
 #          Slowest script (reads the 18 yearly CSVs via load_ibama_clean(),
 #          see 00_load_ibama_clean.R); caches a filtered parquet on first run
-#          and reuses it afterwards. Independent of 07_offender_network.R —
+#          and reuses it afterwards. Independent of 06_offender_network.R —
 #          either can run first, each builds the cache if it's missing.
 # =============================================================================
 
 source("viz/00_setup.R")
 source("viz/00_load_ibama_clean.R")
 library(ineq)      # Gini / Lorenz
-
-# -----------------------------------------------------------------------------
-#### Setting local files (viz caches, under PATH_CACHE)
-# -----------------------------------------------------------------------------
-
-FILE_CANCEL <- "viz_muni_cancellation.parquet"   # per-muni cancel rate (map 17)
-cancel_path <- file.path(PATH_CACHE, FILE_CANCEL)
 
 # -----------------------------------------------------------------------------
 #### Read + filter the raw IBAMA files (shared loader, cached)
@@ -40,7 +32,7 @@ defor <- ibama_clean$defor
 clean <- ibama_clean$clean
 
 # -----------------------------------------------------------------------------
-#### 11 — Lorenz curve of fine concentration across offenders
+#### 7 — Lorenz curve of fine concentration across offenders
 # -----------------------------------------------------------------------------
 
 offender_totals <- clean %>%
@@ -78,7 +70,7 @@ p_lorenz <- ggplot(lorenz, aes(x = cum_offenders, y = cum_fine)) +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 12 — cancellation-rate series + by state
+#### 8 and 9 — cancellation-rate series + by state
 # -----------------------------------------------------------------------------
 
 cancel_year <- defor %>%
@@ -130,7 +122,7 @@ p_cancel_uf <- ggplot(cancel_uf, aes(x = rate, y = UF)) +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 13 — fact -> notice lag histogram
+#### 10 — fact -> notice lag histogram
 # -----------------------------------------------------------------------------
 # Only ~28% of clean autos carry DT_FATO_INFRACIONAL — partial, possibly
 # non-random sample (better-staffed units may fill it more often).
@@ -161,7 +153,7 @@ p_lag <- ggplot(lag_df, aes(x = lag_days)) +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 14 — embargo / apreensão share by EGS quintile
+#### 11 — embargo / apreensão share by EGS quintile
 # -----------------------------------------------------------------------------
 
 muni_instr <- clean %>%
@@ -187,41 +179,11 @@ p_instrument <- ggplot(instr_long, aes(x = egs_quintile, y = share, fill = instr
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### Cache the per-municipality cancellation rate (for map 17)
-# -----------------------------------------------------------------------------
-
-muni_cancellation <- defor %>%
-  group_by(COD_MUNICIPIO) %>%
-  summarise(cancel_rate = mean(SIT_CANCELADO == "S", na.rm = TRUE), n = n(), .groups = "drop") %>%
-  filter(n >= 5) %>%
-  rename(geocode_ibge = COD_MUNICIPIO)
-arrow::write_parquet(muni_cancellation, cancel_path)
-
-# -----------------------------------------------------------------------------
-#### 17 — cancellation rate by municipality (choropleth)
-# -----------------------------------------------------------------------------
-# Lives here, not in 01_maps.R: muni_cancellation only exists once this script
-# has run, and it's already in memory above — no need to round-trip it through
-# the parquet cache just written. muni_mesh comes from 00_setup.R, sourced by
-# every viz/*.R script including this one.
-
-map_cancel <- muni_mesh %>%
-  left_join(muni_cancellation, by = c("code_muni" = "geocode_ibge")) %>%
-  mutate(q_cancel = factor(q5(cancel_rate)))
-
-p_cancel_map <- ggplot(map_cancel) +
-  geom_sf(aes(fill = q_cancel), colour = "white", linewidth = 0.05) +
-  scale_fill_manual(values = QUINTILE_PALETTE, name = "Quintil\ntaxa de cancelamento",
-                    na.value = "grey90") +
-  theme_map
-
-# -----------------------------------------------------------------------------
 #### Save
 # -----------------------------------------------------------------------------
 
-ggsave(file.path(PATH_OUT, "11_lorenz_offenders.png"),      p_lorenz,      width = 6, height = 6, dpi = 150)
-ggsave(file.path(PATH_OUT, "12a_cancel_by_year.png"),       p_cancel_year, width = 8, height = 4, dpi = 150)
-ggsave(file.path(PATH_OUT, "12b_cancel_by_state.png"),      p_cancel_uf,   width = 6, height = 4, dpi = 150)
-ggsave(file.path(PATH_OUT, "13_fact_notice_lag.png"),       p_lag,         width = 7, height = 4, dpi = 150)
-ggsave(file.path(PATH_OUT, "14_instrument_by_quintile.png"),p_instrument,  width = 7, height = 4, dpi = 150)
-ggsave(file.path(PATH_OUT, "17_cancellation_map.png"),      p_cancel_map,  width = 8, height = 7, dpi = 150)
+ggsave(file.path(PATH_OUT, "07_lorenz_offenders.png"),      p_lorenz,      width = 6, height = 6, dpi = 150)
+ggsave(file.path(PATH_OUT, "08_cancel_by_year.png"),       p_cancel_year, width = 8, height = 4, dpi = 150)
+ggsave(file.path(PATH_OUT, "09_cancel_by_state.png"),      p_cancel_uf,   width = 6, height = 4, dpi = 150)
+ggsave(file.path(PATH_OUT, "10_fact_notice_lag.png"),       p_lag,         width = 7, height = 4, dpi = 150)
+ggsave(file.path(PATH_OUT, "11_instrument_by_quintile.png"),p_instrument,  width = 7, height = 4, dpi = 150)

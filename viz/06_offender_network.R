@@ -62,4 +62,4 @@ p_net <- ggraph(g, layout = "fr") +
   scale_size_manual(values = c(offender = 3, municipality = 1.8), guide = "none") +
   theme_void(base_size = 12)
 
-ggsave(file.path(PATH_OUT, "18_offender_network.png"), p_net, width = 9, height = 7, dpi = 150)
+ggsave(file.path(PATH_OUT, "14_offender_network.png"), p_net, width = 9, height = 7, dpi = 150)

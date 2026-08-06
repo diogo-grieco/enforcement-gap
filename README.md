@@ -30,7 +30,7 @@ project2/
 ├── exploration/                (validação paralela em R, roda direto sobre os CSVs brutos)
 │   └── exploring_script.R
 ├── viz/                         (suíte de visualização; ver viz/README.md)
-│   ├── 00_setup.R, 00_build_mesh.R, 01_maps.R … 07_offender_network.R
+│   ├── 00_setup.R, 00_build_mesh.R, 01_maps.R … 06_offender_network.R
 │   └── README.md
 ├── deliverables/
 │   ├── EGMS_01_resumo_executivo.docx
@@ -53,10 +53,10 @@ project2/
     │   ├── egs_final.parquet
     │   ├── egs_ranking.parquet
     │   └── annual_summary.parquet
-    └── visualizations/          (PNG/GIF gerados pela suíte viz/)
+    └── visualizations/          (PNG gerados pela suíte viz/)
 ```
 
-`data/`, os parquets finais em `output/parquets/`, `output/visualizations/` e `deliverables/` **são versionados**: é o que torna o repositório reprodutível a partir de um clone limpo e legível diretamente no GitHub, sem depender de um download externo. `data/data_ibama_public/` é uma versão derivada do dado bruto do IBAMA sem identificação do autuado (ver seção "Dados do IBAMA e privacidade" abaixo); o CSV original com nome/CPF/CNPJ nunca é versionado. A malha antes da simplificação, caches intermediários (`output/parquets/viz_*.parquet`) e o banco `project2.duckdb` não são versionados, são grandes e regenerados por um rerun local.
+`data/`, os parquets finais em `output/parquets/`, `output/visualizations/` e `deliverables/` são versionados: é o que torna o repositório reprodutível a partir de um clone limpo e legível diretamente no GitHub, sem depender de um download externo. `data/data_ibama_public/` é uma versão derivada do dado bruto do IBAMA sem identificação do autuado (ver seção "Dados do IBAMA e privacidade" abaixo); o CSV original com nome/CPF/CNPJ nunca é versionado. A malha antes da simplificação, caches intermediários (`output/parquets/viz_*.parquet`) e o banco `project2.duckdb` não são versionados, são grandes e regenerados por um rerun local.
 
 ---
 
@@ -76,15 +76,11 @@ Os nomes de arquivo esperados por `01_staging.sql` usam wildcard (`*`) para PROD
 
 ## Dados do IBAMA e privacidade
 
-Os autos de infração do IBAMA, como publicados, trazem nome e CPF/CNPJ do autuado. Como este repositório é público, `data/data_ibama_public/` mantém apenas as 13 das 84 colunas brutas efetivamente usadas em algum ponto do pipeline ou da suíte `viz/` (município, datas, valor da multa, tipo e código da infração, status, embargo/apreensão). `NOME_INFRATOR` é descartado (nunca é lido em nenhum script). `CPF_CNPJ_INFRATOR` é substituído por um **identificador substituto aleatório e estável** (`pid_` + 16 dígitos hexadecimais sorteados, um por autuado): o mesmo autuado recebe sempre o mesmo `pid_`, então toda contagem que depende de identidade (curva de Lorenz, rede de infratores multi-município) é idêntica ao dado original. O mapa `CPF/CNPJ → pid_` é gerado uma única vez, mantido apenas localmente e **nunca versionado**. O CSV original com nome/CPF/CNPJ nunca é versionado neste repositório.
+Os autos do IBAMA, como o órgão os publica, trazem nome e CPF/CNPJ do autuado. `data/data_ibama_public/` é um recorte sem essa identificação: 13 das 84 colunas, `NOME_INFRATOR` descartado e `CPF_CNPJ_INFRATOR` trocado por um identificador aleatório e estável (`pid_`), cujo mapa é gerado uma vez, mantido local e nunca versionado.
 
-**O que essa substituição garante, e o que ela não garante.** Como o substituto é aleatório (não derivado do próprio CPF/CNPJ), **o `pid_` não é reversível**: não existe salt, chave ou função conhecida que, aplicada a um CPF candidato, reproduza o identificador publicado. Uma versão anterior deste repositório usava `sha256(salt + CPF/CNPJ)` com o salt publicado no próprio README, o que *era* reversível por força bruta; essa versão foi substituída e nunca chegou a ser commitada: `data/data_ibama_public/` aparece pela primeira vez no repositório já com o substituto aleatório.
+Duas coisas precisam ficar claras, porque a segunda costuma ser lida errado. O `pid_` **não é reversível**: sendo sorteado, e não derivado do CPF/CNPJ, não existe chave que o reproduza. Mas isto **não é uma anonimização**: as outras 12 colunas são idênticas ao CSV original do IBAMA, que é público *com* a identificação, e a combinação de município, data e valor identifica unicamente 74,3% das 309.116 linhas. Quem baixar a fonte refaz o vínculo. O propósito do `pid_` é permitir as contagens por identidade sem que este repositório redistribua CPF/CNPJ, não impedir a reidentificação de um dado que o órgão publica.
 
-O que a substituição **não** faz é tornar a linha anônima. As outras 12 colunas são reproduzidas sem alteração a partir do CSV original do IBAMA, que é **público e traz `NOME_INFRATOR` e `CPF_CNPJ_INFRATOR`**. A combinação (`COD_MUNICIPIO`, `DAT_HORA_AUTO_INFRACAO`, `VAL_AUTO_INFRACAO`) identifica unicamente **74,3% das 309.116 linhas**, e `CD_TERMOS_EMBARGOS`/`CD_TERMOS_APREENSAO` são números de termo consultáveis nos registros do próprio IBAMA. Quem baixar a fonte original consegue, portanto, refazer o vínculo linha a linha, e, por transitividade, reconstruir o mapa `pid_ → CPF/CNPJ` para boa parte da base.
-
-Isso é uma consequência deliberada do desenho, não uma falha de execução: **o dado-fonte já é público com a identificação**, e esta pasta é uma cópia reduzida dele, não uma desidentificação. O propósito do `pid_` é permitir que as contagens por identidade (Lorenz, Gini, rede de infratores) sejam reproduzíveis **sem que este repositório redistribua CPF/CNPJ**, não impedir a reidentificação de um dado que o órgão publica. Quem precisar de um dado efetivamente anonimizado deve tratar esta pasta como o que ela é: um recorte de dado administrativo público.
-
-**Nota de reprodutibilidade:** por ser aleatório, o pseudônimo **não é bit-reproduzível**. Quem rerodar o script de derivação sobre o dado bruto do IBAMA vai gerar `pid_` diferentes dos publicados aqui, e a coluna não será comparável célula a célula com a deste repositório. Isso é deliberado (é o que impede a reversão) e não afeta nenhum resultado: tudo que o pipeline e a suíte `viz/` calculam a partir dessa coluna depende apenas de *igualdade preservada* (mesmo autuado, mesmo símbolo), não do valor em si. A curva de Lorenz, o índice de Gini e a rede de infratores multi-município reproduzem identicamente sob qualquer rodada do script.
+Detalhamento, script de derivação e nota de reprodutibilidade do pseudônimo: [`data/data_ibama_public/README.md`](data/data_ibama_public/README.md).
 
 ---
 
@@ -96,7 +92,7 @@ O topo de `01_staging.sql` define uma variável de sessão do DuckDB que é a **
 SET VARIABLE data_root = 'C:/Users/diogo/projects/project2';  -- editar aqui
 ```
 
-Todos os `read_csv`/`read_json_auto` do pipeline usam `getvariable('data_root') || '/...'`, **inclusive os `COPY ... TO` e o check de `04_export.sql`**, essa linha é, de fato, a única que precisa ser editada em todo o pipeline. Como a variável é de sessão, rode os quatro arquivos na mesma conexão (no DBeaver: mesma aba/conexão do `project2.duckdb`).
+Todos os `read_csv`/`read_json_auto` do pipeline usam `getvariable('data_root') || '/...'`, inclusive os `COPY ... TO` e o check de `04_export.sql`, essa linha é, de fato, a única que precisa ser editada em todo o pipeline. Como a variável é de sessão, rode os quatro arquivos na mesma conexão (no DBeaver: mesma aba/conexão do `project2.duckdb`).
 
 **Versão do motor.** O pipeline foi rodado e verificado em DuckDB 1.5.x (pacote R `duckdb` 1.5.4.3 e CLI 1.5.5). O `quote = '"'` declarado no `read_csv` do IBAMA em `01_staging.sql` é o que torna a leitura independente da versão: sem ele, DuckDB a partir de 1.2.0 aborta em 86 linhas que trazem `;` dentro de aspas.
 
@@ -117,7 +113,7 @@ Todos os `read_csv`/`read_json_auto` do pipeline usam `getvariable('data_root') 
    04_export.sql     → materializa 3 parquets em output/parquets/
    ```
    No DBeaver: abrir o script, associar à conexão do `project2.duckdb`, `Execute SQL Script` (Alt+X) roda o arquivo inteiro, incluindo o bloco `== CHECKS ==` ao final.
-4. Confira os checks: cada arquivo termina em **uma única query consolidada** que retorna `check_name | actual | expected | status` (56 checks no total, entre os 4 arquivos; falhas aparecem no topo do grid). Qualquer linha com `status = failed` deve ser investigada antes de prosseguir, ver a nota de reprodutibilidade acima antes de assumir que é um bug. A pasta `output/parquets/` precisa existir antes de rodar o `04` (o `COPY` não cria diretórios).
+4. Confira os checks: cada arquivo termina em uma única query consolidada que retorna `check_name | actual | expected | status` (56 checks no total, entre os 4 arquivos; falhas aparecem no topo do grid). Qualquer linha com `status = failed` deve ser investigada antes de prosseguir, ver a nota de reprodutibilidade acima antes de assumir que é um bug. A pasta `output/parquets/` precisa existir antes de rodar o `04` (o `COPY` não cria diretórios).
 5. Rode a suíte `viz/` (ver `viz/README.md`) para gerar os gráficos e mapas a partir dos parquets, ou aponte o Power BI para os 3 arquivos em `output/parquets/`.
 6. (Opcional) Rode `exploration/exploring_script.R` para reproduzir, em R, a validação independente das mesmas decisões (filtro de desmatamento, lag do join IBAMA/PRODES, sensibilidade do limiar, EGS reconstruído), é a checagem cruzada da implementação SQL, não uma etapa obrigatória do pipeline.
 
@@ -137,7 +133,7 @@ Os valores esperados nos blocos de check (`n_ibama = 60707`, `total_fines = 2681
 
 Antes de comparar um check `failed` com o pipeline, confirme se algum dos 5 arquivos foi rebaixado depois dessas datas. Se sim, o esperado do check é o que precisa ser atualizado, não o SQL.
 
-O mesmo contrato vale para a suíte `viz/`. Os números que os relatórios publicam e que nascem na camada R (o índice de Gini e a população sobre a qual é calculado, a base das figuras de cancelamento, a mediana da defasagem, os coeficientes de painel e do event study) estão fixados como constantes `PUB_*` no script que os produz, asseridas com `stopifnot()` logo abaixo do cálculo. São fotografias do mesmo snapshot, não invariantes: se um deles falhar depois de rebaixar dados, o que precisa ser atualizado é o esperado **e o texto que o publica**, não o código. Rode `grep "^PUB_" viz/*.R` para ver o inventário completo do que os deliverables assumem.
+O mesmo contrato vale para a suíte `viz/`: os números que os relatórios publicam e que nascem na camada R (Gini e sua população, base das figuras de cancelamento, mediana da defasagem, coeficientes de painel e do event study) estão fixados como constantes `PUB_*` no script que os produz, asseridas com `stopifnot()` logo abaixo do cálculo. Se um deles falhar depois de rebaixar dados, o que precisa mudar é o esperado e o texto que o publica, não o código. `grep "^PUB_" viz/*.R` lista o inventário completo.
 
 ---
 
@@ -168,9 +164,10 @@ Mudanças de substância entre versões, incluindo as que alteraram números pub
 
 ## Limitações conhecidas (resumo, detalhamento em `deliverables/EGMS_03_relatorio_estendido.docx`)
 
-- **O índice mede lacuna de fiscalização *federal*.** Só autos do IBAMA entram como resposta; aparatos estaduais ativos (ex.: SEMAS-PA, IPAAM-AM) não são capturados, um EGS alto é compatível com ausência real, substituição estadual, ou presença federal sem efeito.
-- **PRODES ≠ desmatamento ilegal.** O índice não distingue supressão autorizada (AUTEX/DOF) de ilegal, caso verificado: Barra do Bugres/MT.
-- **Resposta = autos lavrados.** Embargos, apreensões, ação penal e arrecadação efetiva das multas não entram.
-- **EGS é ordinal na prática.** A ordenação é robusta (testada por sensibilidade); distâncias entre scores não têm interpretação direta.
-- **Amazônia Legal apenas**; extensão a outros biomas ou jurisdições exige novo join espacial.
-- **Último ano sujeito a revisão**: o dado PRODES 2025 pode não estar consolidado; a média de 3 anos o inclui, com essa ressalva.
+- O índice mede lacuna de fiscalização *federal*. Só autos do IBAMA entram como resposta; aparatos estaduais ativos (SEMAS-PA, IPAAM-AM) não são capturados. Um EGS alto é compatível com ausência real, substituição estadual ou presença federal sem efeito.
+- Dentro do próprio dado federal, só entram autos de tipo desmatamento. Nos vinte municípios do topo, são 1.187 dos 3.513 que o IBAMA lavrou no período, ou 34%: o resto é fauna, pesca, controle ambiental, cadastro e unidade de conservação — esta última a mesma lacuna do ICMBio que Porto de Moz ilustra. Onde o vetor da supressão é garimpo, a resposta federal chega por instrumento que o índice não pontua.
+- PRODES ≠ desmatamento ilegal. O índice não distingue supressão autorizada (AUTEX/DOF) de ilegal; casos verificados em Barra do Bugres/MT, Oriximiná, Autazes e Acará.
+- Resposta = autos lavrados. Embargos, apreensões, ação penal e arrecadação efetiva das multas não entram.
+- EGS é ordinal na prática. A ordenação é robusta, testada por sensibilidade; distâncias entre scores não têm interpretação direta.
+- Amazônia Legal apenas; extensão a outros biomas ou jurisdições exige novo join espacial.
+- Último ano sujeito a revisão: o dado PRODES 2025 pode não estar consolidado, e a média de 3 anos o inclui.

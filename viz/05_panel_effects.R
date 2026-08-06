@@ -6,12 +6,12 @@
 # Author: Diogo Grieco
 #
 # Purpose: The panel-regression findings, in R/fixest to match the thesis
-#          methodology (items 15, 16, 19).
-#            15 coefficient plot summarising the five two-way FE models
-#            16 event study around a deforestation surge (autos & fines,
+#          methodology (report figures 12, 13 and 15).
+#            12 coefficient plot summarising the five two-way FE models
+#            13 event study around a deforestation surge (autos & fines,
 #               with placebo pre-period) — the honest test of the "hangover":
 #               directional for autos, fragile (CIs cross zero)
-#            19 ridgeline of the EGS distribution by year
+#            15 ridgeline of the EGS distribution by year
 #          Reproduces the Python/linearmodels pilot (ACHADOS_VARREDURA...md)
 #          with municipality + year FE and municipality-clustered SEs — the
 #          exact estimator planned for the dissertation.
@@ -123,7 +123,7 @@ stopifnot(
 )
 
 # -----------------------------------------------------------------------------
-#### 15 — coefficient plot
+#### 12 — coefficient plot
 # -----------------------------------------------------------------------------
 
 grab <- function(model, term, label) {
@@ -153,7 +153,7 @@ p_coef <- ggplot(coef_df, aes(x = estimate, y = label)) +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 16 — event study around a deforestation surge (the honest version)
+#### 13 — event study around a deforestation surge (the honest version)
 # -----------------------------------------------------------------------------
 # A raw 3-municipality time series CANNOT show the "hangover" — it is a partial,
 # average effect (net of the deforestation level), not a raw-series phenomenon
@@ -230,7 +230,7 @@ p_event <- ggplot(es_df, aes(x = event_time, y = estimate, colour = outcome)) +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 19 — ridgeline of EGS distribution by year
+#### 15 — ridgeline of EGS distribution by year
 # -----------------------------------------------------------------------------
 # Whole distribution shifting over 2008-2025, not just the mean. EGS is
 # ordinal; a ridgeline reads shape/spread (legitimate), whereas comparing
@@ -248,6 +248,6 @@ p_ridge <- ggplot(final %>% filter(egs > 0),   # drop the no-pressure zero mass
 #### Save
 # -----------------------------------------------------------------------------
 
-ggsave(file.path(PATH_OUT, "15_coefficient_plot.png"), p_coef,     width = 8, height = 5, dpi = 150)
-ggsave(file.path(PATH_OUT, "16_event_study.png"),      p_event,    width = 8, height = 5, dpi = 150)
-ggsave(file.path(PATH_OUT, "19_egs_ridgeline.png"),    p_ridge,    width = 7, height = 7, dpi = 150)
+ggsave(file.path(PATH_OUT, "12_coefficient_plot.png"), p_coef,     width = 8, height = 5, dpi = 150)
+ggsave(file.path(PATH_OUT, "13_event_study.png"),      p_event,    width = 8, height = 5, dpi = 150)
+ggsave(file.path(PATH_OUT, "15_egs_ridgeline.png"),    p_ridge,    width = 7, height = 7, dpi = 150)

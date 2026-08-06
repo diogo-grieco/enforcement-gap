@@ -5,13 +5,10 @@
 #
 # Author: Diogo Grieco
 #
-# Purpose: Static choropleth maps (list items 1a-1d). Map 17 (cancellation rate)
-#          moved to 04_raw_ibama.R, right next to the data it depends on —
-#          see that file instead of running this one twice.
-#            1a  choropleth: deforestation as % of municipal area (quintiles)
-#            1b  choropleth: deforestation in absolute km2 (quintiles)
-#            1c  choropleth: mean 18y EGS (quintiles)
-#            1d  bivariate map: colour = pct quintile, bubble = total fines,
+# Purpose: Static choropleth maps (report figures 1-3).
+#            1  choropleth: deforestation in absolute km2 (quintiles)
+#            2  choropleth: mean 18y EGS (quintiles)
+#            3  bivariate map: colour = pct quintile, bubble = total fines,
 #                outline = top 20 by avg_egs_18y  (the dashboard's map)
 # =============================================================================
 
@@ -42,35 +39,23 @@ map_data <- map_data %>%
   )
 
 # -----------------------------------------------------------------------------
-#### Top-20 centroids (pins / highlight)
+#### Top-20 highlight (outline)
 # -----------------------------------------------------------------------------
-# suppressWarnings: centroid on a geographic CRS warns about precision — fine
-# here, we only need a point to place a marker, not to measure distance.
+# One highlight for all three maps: the municipality boundary drawn thick, not
+# a pin on the centroid. A pin marks a point where the object is an area, and
+# it hid the fill of the very municipalities the reader is being pointed to.
 
 TOP_N <- 20
 top20_codes <- ranking %>% slice_max(avg_egs_18y, n = TOP_N) %>% pull(geocode_ibge)
-top20_pts   <- suppressWarnings(
-  st_centroid(map_data %>% filter(code_muni %in% top20_codes))
-)
+top20_shapes <- map_data %>% filter(code_muni %in% top20_codes)
 
-stopifnot("top20: expected TOP_N centroids" = nrow(top20_pts) == TOP_N)
+stopifnot("top20: expected TOP_N shapes" = nrow(top20_shapes) == TOP_N)
 
-pin_layer <- geom_sf(data = top20_pts, shape = 21, fill = "#2e6e54",
-                     colour = "white", size = 2.2, stroke = 0.6,
-                     inherit.aes = FALSE)
+outline_layer <- geom_sf(data = top20_shapes, fill = NA, colour = "#1a3d2e",
+                         linewidth = 0.6, inherit.aes = FALSE)
 
 # -----------------------------------------------------------------------------
-#### 1a — deforestation (% of area)
-# -----------------------------------------------------------------------------
-
-m_defor_pct <- ggplot(map_data) +
-  geom_sf(aes(fill = q_defor_pct), colour = "white", linewidth = 0.05) +
-  scale_fill_manual(values = QUINTILE_PALETTE, name = "Quintil de\n% desmatado") +
-  pin_layer +
-  theme_map
-
-# -----------------------------------------------------------------------------
-#### 1b — deforestation (absolute km2)
+#### 1 — deforestation (absolute km2)
 # -----------------------------------------------------------------------------
 # Best match to the EGS pattern (Spearman 0.97 with EGS): the EGS numerator
 # uses absolute area, not the area ratio.
@@ -78,21 +63,21 @@ m_defor_pct <- ggplot(map_data) +
 m_defor_abs <- ggplot(map_data) +
   geom_sf(aes(fill = q_defor_abs), colour = "white", linewidth = 0.05) +
   scale_fill_manual(values = QUINTILE_PALETTE, name = "Quintil de\ndesmatamento (km²)") +
-  pin_layer +
+  outline_layer +
   theme_map
 
 # -----------------------------------------------------------------------------
-#### 1c — mean 18y EGS
+#### 2 — mean 18y EGS
 # -----------------------------------------------------------------------------
 
 m_egs <- ggplot(map_data) +
   geom_sf(aes(fill = q_egs), colour = "white", linewidth = 0.05) +
   scale_fill_manual(values = QUINTILE_PALETTE, name = "Quintil de\nEGS médio (18 anos)") +
-  pin_layer +
+  outline_layer +
   theme_map
 
 # -----------------------------------------------------------------------------
-#### 1d — bivariate map (colour = pct quintile, bubble = total fines)
+#### 3 — bivariate map (colour = pct quintile, bubble = total fines)
 # -----------------------------------------------------------------------------
 # The dashboard's central map, in ggplot: choropleth of pct_desmatado quintile
 # + bubbles with AREA proportional to total fines (scale_size_area) + top-20
@@ -103,20 +88,21 @@ bubble_pts <- suppressWarnings(st_centroid(map_data))
 m_bivariate <- ggplot(map_data) +
   geom_sf(aes(fill = q_defor_pct), colour = "white", linewidth = 0.05) +
   scale_fill_manual(values = QUINTILE_PALETTE, name = "Quintil de\n% desmatado") +
+  # bolhas mais visiveis: o preenchimento a 18% sumia sobre os quintis
+  # escuros. 40% de opacidade e contorno mais firme mantem a leitura dupla
+  # (a cor do municipio continua visivel por baixo) sem que a bolha se perca.
   geom_sf(data = bubble_pts, aes(size = total_fines),
-          shape = 21, fill = "#4a5d8a2e", colour = "#4a5d8a",
-          stroke = 0.4, inherit.aes = FALSE) +
-  scale_size_area(max_size = 12, name = "Total de multas (R$, deflacionado)",
+          shape = 21, fill = "#4a5d8a66", colour = "#2f3f63",
+          stroke = 0.8, inherit.aes = FALSE) +
+  scale_size_area(max_size = 14, name = "Total de multas (R$, deflacionado)",
                   labels = label_number(scale_cut = cut_br_scale())) +
-  geom_sf(data = map_data %>% filter(code_muni %in% top20_codes),
-          fill = NA, colour = "#1a3d2e", linewidth = 0.6, inherit.aes = FALSE) +
+  outline_layer +
   theme_map
 
 # -----------------------------------------------------------------------------
 #### Save
 # -----------------------------------------------------------------------------
 
-ggsave(file.path(PATH_OUT, "01a_deforestation_pct.png"), m_defor_pct, width = 8, height = 7, dpi = 150)
-ggsave(file.path(PATH_OUT, "01b_deforestation_abs.png"), m_defor_abs, width = 8, height = 7, dpi = 150)
-ggsave(file.path(PATH_OUT, "01c_egs_mean18y.png"),       m_egs,        width = 8, height = 7, dpi = 150)
-ggsave(file.path(PATH_OUT, "01d_bivariate_map.png"),     m_bivariate,  width = 9, height = 7, dpi = 150)
+ggsave(file.path(PATH_OUT, "01_deforestation_abs.png"), m_defor_abs, width = 8, height = 7, dpi = 150)
+ggsave(file.path(PATH_OUT, "02_egs_mean18y.png"),       m_egs,        width = 8, height = 7, dpi = 150)
+ggsave(file.path(PATH_OUT, "03_bivariate_map.png"),     m_bivariate,  width = 9, height = 7, dpi = 150)
