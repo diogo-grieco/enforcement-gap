@@ -176,36 +176,36 @@ ORDER BY year;
 ----------------------------------------------------------
 
 WITH checks AS (
-    SELECT 'n_ibama_clean' AS check_name, CAST(COUNT(*) AS VARCHAR) AS actual, '60707' AS expected FROM project2.marts.ibama_clean
-    UNION ALL SELECT 'null_year_ibama_clean', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.marts.ibama_clean WHERE year IS NULL
-    UNION ALL SELECT 'min_year_ibama_clean', CAST(MIN(year) AS VARCHAR), '2008' FROM project2.marts.ibama_clean
-    UNION ALL SELECT 'max_year_ibama_clean', CAST(MAX(year) AS VARCHAR), '2025' FROM project2.marts.ibama_clean
-    UNION ALL SELECT 'negative_fine_ibama_clean', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.marts.ibama_clean WHERE fine_value < 0
-    UNION ALL SELECT 'total_fines_ibama_clean', CAST(CAST(ROUND(SUM(fine_value)) AS BIGINT) AS VARCHAR), '26814492927' FROM project2.marts.ibama_clean
-    UNION ALL SELECT 'n_rows_prodes_clean', CAST(COUNT(*) AS VARCHAR), '13896' FROM project2.marts.prodes_clean
-    UNION ALL SELECT 'n_geocodes_prodes_clean', CAST(COUNT(DISTINCT geocode_ibge) AS VARCHAR), '772' FROM project2.marts.prodes_clean
-    UNION ALL SELECT 'n_years_prodes_clean', CAST(COUNT(DISTINCT year) AS VARCHAR), '18' FROM project2.marts.prodes_clean
-    UNION ALL SELECT 'na_geocode_prodes_clean', CAST(SUM(CASE WHEN geocode_ibge IS NULL THEN 1 ELSE 0 END) AS VARCHAR), '0' FROM project2.marts.prodes_clean
-    UNION ALL SELECT 'na_year_prodes_clean', CAST(SUM(CASE WHEN year IS NULL THEN 1 ELSE 0 END) AS VARCHAR), '0' FROM project2.marts.prodes_clean
-    UNION ALL SELECT 'na_area_prodes_clean', CAST(SUM(CASE WHEN area_km2 IS NULL THEN 1 ELSE 0 END) AS VARCHAR), '0' FROM project2.marts.prodes_clean
+    SELECT '01_n_ibama_clean' AS check_name, CAST(COUNT(*) AS VARCHAR) AS actual, '60707' AS expected FROM project2.marts.ibama_clean
+    UNION ALL SELECT '02_null_year_ibama_clean', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.marts.ibama_clean WHERE year IS NULL
+    UNION ALL SELECT '03_min_year_ibama_clean', CAST(MIN(year) AS VARCHAR), '2008' FROM project2.marts.ibama_clean
+    UNION ALL SELECT '04_max_year_ibama_clean', CAST(MAX(year) AS VARCHAR), '2025' FROM project2.marts.ibama_clean
+    UNION ALL SELECT '05_negative_fine_ibama_clean', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.marts.ibama_clean WHERE fine_value < 0
+    UNION ALL SELECT '06_total_fines_ibama_clean', CAST(CAST(ROUND(SUM(fine_value)) AS BIGINT) AS VARCHAR), '26814492927' FROM project2.marts.ibama_clean
+    UNION ALL SELECT '07_n_rows_prodes_clean', CAST(COUNT(*) AS VARCHAR), '13896' FROM project2.marts.prodes_clean
+    UNION ALL SELECT '08_n_geocodes_prodes_clean', CAST(COUNT(DISTINCT geocode_ibge) AS VARCHAR), '772' FROM project2.marts.prodes_clean
+    UNION ALL SELECT '09_n_years_prodes_clean', CAST(COUNT(DISTINCT year) AS VARCHAR), '18' FROM project2.marts.prodes_clean
+    UNION ALL SELECT '10_na_geocode_prodes_clean', CAST(SUM(CASE WHEN geocode_ibge IS NULL THEN 1 ELSE 0 END) AS VARCHAR), '0' FROM project2.marts.prodes_clean
+    UNION ALL SELECT '11_na_year_prodes_clean', CAST(SUM(CASE WHEN year IS NULL THEN 1 ELSE 0 END) AS VARCHAR), '0' FROM project2.marts.prodes_clean
+    UNION ALL SELECT '12_na_area_prodes_clean', CAST(SUM(CASE WHEN area_km2 IS NULL THEN 1 ELSE 0 END) AS VARCHAR), '0' FROM project2.marts.prodes_clean
     -- n_years_prodes_clean counts 18 DISTINCT years but does not guarantee
     -- the range, hence the min/max checks alongside it.
-    UNION ALL SELECT 'negative_area_prodes_clean', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.marts.prodes_clean WHERE area_km2 < 0
-    UNION ALL SELECT 'min_year_prodes_clean', CAST(MIN(year) AS VARCHAR), '2008' FROM project2.marts.prodes_clean
-    UNION ALL SELECT 'max_year_prodes_clean', CAST(MAX(year) AS VARCHAR), '2025' FROM project2.marts.prodes_clean
+    UNION ALL SELECT '13_negative_area_prodes_clean', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.marts.prodes_clean WHERE area_km2 < 0
+    UNION ALL SELECT '14_min_year_prodes_clean', CAST(MIN(year) AS VARCHAR), '2008' FROM project2.marts.prodes_clean
+    UNION ALL SELECT '15_max_year_prodes_clean', CAST(MAX(year) AS VARCHAR), '2025' FROM project2.marts.prodes_clean
     -- total_area_prodes_clean: a magnitude check on the PRODES side, mirroring
     -- total_fines_ibama_clean. Without it, a swapped/corrupted CSV with the
     -- right shape (counts, years, non-negativity OK) would pass every other
     -- check with wrong areas. Value is the panel's 2008-2025 sum, km2 rounded.
-    UNION ALL SELECT 'total_area_prodes_clean', CAST(CAST(ROUND(SUM(area_km2)) AS BIGINT) AS VARCHAR), '140019' FROM project2.marts.prodes_clean
-    UNION ALL SELECT 'n_municipality_ref', CAST(COUNT(*) AS VARCHAR), '5571' FROM project2.marts.municipality_ref
-    UNION ALL SELECT 'duplicate_geocodes_ref', CAST(COUNT(*) AS VARCHAR), '0' FROM (SELECT geocode_ibge FROM project2.marts.municipality_ref GROUP BY geocode_ibge HAVING COUNT(*) > 1) d
-    UNION ALL SELECT 'invalid_ref_geocode', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.marts.municipality_ref WHERE LENGTH(geocode_ibge) != 7
-    UNION ALL SELECT 'missing_uf_ref', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.marts.municipality_ref WHERE uf IS NULL
-    UNION ALL SELECT 'missing_reference_prodes_to_ref', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.staging.prodes_raw p LEFT JOIN project2.marts.municipality_ref r ON p.geocode_ibge = r.geocode_ibge WHERE r.geocode_ibge IS NULL
-    UNION ALL SELECT 'n_municipality_area', CAST(COUNT(*) AS VARCHAR), '5573' FROM project2.marts.municipality_area
-    UNION ALL SELECT 'duplicate_area_geocodes', CAST(COUNT(*) AS VARCHAR), '0' FROM (SELECT geocode_ibge FROM project2.marts.municipality_area GROUP BY geocode_ibge HAVING COUNT(*) > 1) d
-    UNION ALL SELECT 'missing_area_prodes_to_area', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.staging.prodes_raw p LEFT JOIN project2.marts.municipality_area a ON p.geocode_ibge = a.geocode_ibge WHERE a.geocode_ibge IS NULL
+    UNION ALL SELECT '16_total_area_prodes_clean', CAST(CAST(ROUND(SUM(area_km2)) AS BIGINT) AS VARCHAR), '140019' FROM project2.marts.prodes_clean
+    UNION ALL SELECT '17_n_municipality_ref', CAST(COUNT(*) AS VARCHAR), '5571' FROM project2.marts.municipality_ref
+    UNION ALL SELECT '18_duplicate_geocodes_ref', CAST(COUNT(*) AS VARCHAR), '0' FROM (SELECT geocode_ibge FROM project2.marts.municipality_ref GROUP BY geocode_ibge HAVING COUNT(*) > 1) d
+    UNION ALL SELECT '19_invalid_ref_geocode', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.marts.municipality_ref WHERE LENGTH(geocode_ibge) != 7
+    UNION ALL SELECT '20_missing_uf_ref', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.marts.municipality_ref WHERE uf IS NULL
+    UNION ALL SELECT '21_missing_reference_prodes_to_ref', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.staging.prodes_raw p LEFT JOIN project2.marts.municipality_ref r ON p.geocode_ibge = r.geocode_ibge WHERE r.geocode_ibge IS NULL
+    UNION ALL SELECT '22_n_municipality_area', CAST(COUNT(*) AS VARCHAR), '5573' FROM project2.marts.municipality_area
+    UNION ALL SELECT '23_duplicate_area_geocodes', CAST(COUNT(*) AS VARCHAR), '0' FROM (SELECT geocode_ibge FROM project2.marts.municipality_area GROUP BY geocode_ibge HAVING COUNT(*) > 1) d
+    UNION ALL SELECT '24_missing_area_prodes_to_area', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.staging.prodes_raw p LEFT JOIN project2.marts.municipality_area a ON p.geocode_ibge = a.geocode_ibge WHERE a.geocode_ibge IS NULL
     -- missing_legal_amazon_munis: expected 1, not 0 — documented source anomaly,
     -- same idiom as invalid_geocode_ibama and out_of_scope_geocodes_prodes.
     -- The one missing is 5101837 Boa Esperança do Norte/MT, split off Nova
@@ -220,19 +220,19 @@ WITH checks AS (
     -- 13,425 km2 pre-split area). Affects that one context value only: the
     -- ranking is ordered by avg_egs_18y, and the panel's median/p75/max
     -- pct_desmatado are unchanged. Fires if a future download adds the muni.
-    UNION ALL SELECT 'missing_legal_amazon_munis', CAST(COUNT(*) AS VARCHAR), '1'
+    UNION ALL SELECT '25_missing_legal_amazon_munis', CAST(COUNT(*) AS VARCHAR), '1'
         FROM project2.marts.municipality_ref r
         LEFT JOIN (SELECT DISTINCT geocode_ibge FROM project2.marts.prodes_clean) p
             ON r.geocode_ibge = p.geocode_ibge
         WHERE r.uf IN ('RO','AC','AM','RR','PA','AP','TO','MT') AND p.geocode_ibge IS NULL
-    UNION ALL SELECT 'n_ipca_annual', CAST(COUNT(*) AS VARCHAR), '18' FROM project2.marts.ipca_annual
+    UNION ALL SELECT '26_n_ipca_annual', CAST(COUNT(*) AS VARCHAR), '18' FROM project2.marts.ipca_annual
     -- ipca_months_not_12 mirrors a check the R side already runs
     -- (exploration/exploring_script.R: stopifnot(all(count(ipca_raw, year)$n
     -- == 12))). A malformed month silently dropped by ignore_errors/the regex
     -- filter would shrink AVG(avg_index) to 11 months without tripping
     -- n_ipca_annual (the year would still be present) or invalid_deflator
     -- (still positive) — a silent, undetected skew.
-    UNION ALL SELECT 'ipca_months_not_12', CAST(COUNT(*) AS VARCHAR), '0' FROM (
+    UNION ALL SELECT '27_ipca_months_not_12', CAST(COUNT(*) AS VARCHAR), '0' FROM (
         SELECT CAST(regexp_extract(month, '(\d{4})$', 1) AS INTEGER) AS year, COUNT(*) AS n_months
         FROM (UNPIVOT project2.staging.ipca_raw ON COLUMNS('\d{4}$') INTO NAME month VALUE index) long
         WHERE regexp_matches(index, '^\d+(,\d+)?$')

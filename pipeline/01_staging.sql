@@ -169,10 +169,10 @@ SELECT * FROM read_csv(
 ----------------------------------------------------------
 
 WITH checks AS (
-    SELECT 'n_prodes' AS check_name, CAST(COUNT(*) AS VARCHAR) AS actual, '14490' AS expected FROM project2.staging.prodes_raw
-    UNION ALL SELECT 'n_ibama', CAST(COUNT(*) AS VARCHAR), '309116' FROM project2.staging.ibama_raw
-    UNION ALL SELECT 'n_prodes_columns', CAST(COUNT(*) AS VARCHAR), '5' FROM information_schema.columns WHERE table_catalog='project2' AND table_schema='staging' AND table_name='prodes_raw'
-    UNION ALL SELECT 'n_ibama_columns', CAST(COUNT(*) AS VARCHAR), '13' FROM information_schema.columns WHERE table_catalog='project2' AND table_schema='staging' AND table_name='ibama_raw'
+    SELECT '01_n_prodes' AS check_name, CAST(COUNT(*) AS VARCHAR) AS actual, '14490' AS expected FROM project2.staging.prodes_raw
+    UNION ALL SELECT '02_n_ibama', CAST(COUNT(*) AS VARCHAR), '309116' FROM project2.staging.ibama_raw
+    UNION ALL SELECT '03_n_prodes_columns', CAST(COUNT(*) AS VARCHAR), '5' FROM information_schema.columns WHERE table_catalog='project2' AND table_schema='staging' AND table_name='prodes_raw'
+    UNION ALL SELECT '04_n_ibama_columns', CAST(COUNT(*) AS VARCHAR), '13' FROM information_schema.columns WHERE table_catalog='project2' AND table_schema='staging' AND table_name='ibama_raw'
     -- invalid_geocode_ibama: expected is 29, not 0.
     -- IS NULL is required in addition to LENGTH(...) != 7 — DuckDB's
     -- LENGTH(NULL) evaluates to NULL, not a number, so a plain "!= 7"
@@ -184,7 +184,7 @@ WITH checks AS (
     -- 6 rows have COD_MUNICIPIO IS NULL (garbage rows). Neither group
     -- affects egs_final (RS is outside the Legal Amazon; the NULL rows
     -- fail the ibama_clean status filter anyway) — documented, not corrected.
-    UNION ALL SELECT 'invalid_geocode_ibama', CAST(COUNT(*) AS VARCHAR), '29' FROM project2.staging.ibama_raw WHERE COD_MUNICIPIO IS NULL OR LENGTH(COD_MUNICIPIO) != 7
+    UNION ALL SELECT '05_invalid_geocode_ibama', CAST(COUNT(*) AS VARCHAR), '29' FROM project2.staging.ibama_raw WHERE COD_MUNICIPIO IS NULL OR LENGTH(COD_MUNICIPIO) != 7
     -- out_of_scope_geocodes_prodes: expected is 33, not 0 — same spirit as
     -- invalid_geocode_ibama above. The TerraBrasilis export labelled
     -- "legal_amazon" ships 805 municipalities, but 33 of them sit in states
@@ -206,9 +206,9 @@ WITH checks AS (
     -- n_geocodes_prodes_clean = 772 already guards that side). If a future
     -- PRODES download changes which municipalities it ships, this fires and
     -- the marts filter must be revisited before trusting the panel.
-    UNION ALL SELECT 'out_of_scope_geocodes_prodes', CAST(COUNT(DISTINCT geocode_ibge) AS VARCHAR), '33' FROM project2.staging.prodes_raw WHERE SUBSTR(geocode_ibge, 1, 2) NOT IN ('11','12','13','14','15','16','17','21','51')
-    UNION ALL SELECT 'n_municipality_ref_raw', CAST(COUNT(*) AS VARCHAR), '5571' FROM project2.staging.municipality_ref_raw
-    UNION ALL SELECT 'n_municipality_area_raw', CAST(COUNT(*) AS VARCHAR), '5575' FROM project2.staging.municipality_area_raw
+    UNION ALL SELECT '06_out_of_scope_geocodes_prodes', CAST(COUNT(DISTINCT geocode_ibge) AS VARCHAR), '33' FROM project2.staging.prodes_raw WHERE SUBSTR(geocode_ibge, 1, 2) NOT IN ('11','12','13','14','15','16','17','21','51')
+    UNION ALL SELECT '07_n_municipality_ref_raw', CAST(COUNT(*) AS VARCHAR), '5571' FROM project2.staging.municipality_ref_raw
+    UNION ALL SELECT '08_n_municipality_area_raw', CAST(COUNT(*) AS VARCHAR), '5575' FROM project2.staging.municipality_area_raw
 )
 SELECT check_name, actual, expected,
        CASE WHEN actual = expected THEN 'OK' ELSE 'failed' END AS status

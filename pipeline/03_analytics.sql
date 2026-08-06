@@ -226,44 +226,44 @@ ORDER BY year;
 ----------------------------------------------------------
 
 WITH checks AS (
-    SELECT 'missing_years_ipca_deflator' AS check_name, CAST(COUNT(*) AS VARCHAR) AS actual, '0' AS expected
+    SELECT '01_missing_years_ipca_deflator' AS check_name, CAST(COUNT(*) AS VARCHAR) AS actual, '0' AS expected
         FROM (SELECT UNNEST(RANGE(2008,2026)) AS year) years LEFT JOIN project2.analytics.ipca_deflator d USING(year) WHERE d.year IS NULL
-    UNION ALL SELECT 'invalid_deflator', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.analytics.ipca_deflator WHERE deflator IS NULL OR deflator <= 0
-    UNION ALL SELECT 'deflator_2025', CAST(ROUND(deflator, 1) AS VARCHAR), '1.0' FROM project2.analytics.ipca_deflator WHERE year = 2025
+    UNION ALL SELECT '02_invalid_deflator', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.analytics.ipca_deflator WHERE deflator IS NULL OR deflator <= 0
+    UNION ALL SELECT '03_deflator_2025', CAST(ROUND(deflator, 1) AS VARCHAR), '1.0' FROM project2.analytics.ipca_deflator WHERE year = 2025
     -- deflator_2008 pins the deflator VALUE against the real Sidra series
     -- (2.5826). deflator_2025 = 1.0 holds by construction for ANY series; a
     -- wrong Sidra download with the same shape (different variable, different
     -- base) would pass every structural check without this one.
-    UNION ALL SELECT 'deflator_2008', CAST(ROUND(deflator, 4) AS VARCHAR), '2.5826' FROM project2.analytics.ipca_deflator WHERE year = 2008
-    UNION ALL SELECT 'n_egs_final', CAST(COUNT(*) AS VARCHAR), '13896' FROM project2.analytics.egs_final
-    UNION ALL SELECT 'n_no_pressure', CAST(COUNT(*) AS VARCHAR), '7548' FROM project2.analytics.egs_final WHERE gap_type = 'no_pressure'
-    UNION ALL SELECT 'n_absolute_gap', CAST(COUNT(*) AS VARCHAR), '3063' FROM project2.analytics.egs_final WHERE gap_type = 'absolute_gap'
-    UNION ALL SELECT 'n_measured_gap', CAST(COUNT(*) AS VARCHAR), '3285' FROM project2.analytics.egs_final WHERE gap_type = 'measured_gap'
-    UNION ALL SELECT 'null_egs', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.analytics.egs_final WHERE egs IS NULL
+    UNION ALL SELECT '04_deflator_2008', CAST(ROUND(deflator, 4) AS VARCHAR), '2.5826' FROM project2.analytics.ipca_deflator WHERE year = 2008
+    UNION ALL SELECT '05_n_egs_final', CAST(COUNT(*) AS VARCHAR), '13896' FROM project2.analytics.egs_final
+    UNION ALL SELECT '06_n_no_pressure', CAST(COUNT(*) AS VARCHAR), '7548' FROM project2.analytics.egs_final WHERE gap_type = 'no_pressure'
+    UNION ALL SELECT '07_n_absolute_gap', CAST(COUNT(*) AS VARCHAR), '3063' FROM project2.analytics.egs_final WHERE gap_type = 'absolute_gap'
+    UNION ALL SELECT '08_n_measured_gap', CAST(COUNT(*) AS VARCHAR), '3285' FROM project2.analytics.egs_final WHERE gap_type = 'measured_gap'
+    UNION ALL SELECT '09_null_egs', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.analytics.egs_final WHERE egs IS NULL
     -- n_floor_active: the R$0.01-boundary instability cases the denominator
     -- floor was built to absorb — the floor makes them more conservative
     -- (lower egs) instead of letting the denominator approach 0 (deflated
     -- fines: 28 of 3,285 measured_gap rows).
-    UNION ALL SELECT 'n_floor_active', CAST(COUNT(*) AS VARCHAR), '28' FROM project2.analytics.egs_final WHERE gap_type = 'measured_gap' AND SQRT(LOG(1 + n_infractions) * LOG(1 + fine_values)) < 1
+    UNION ALL SELECT '10_n_floor_active', CAST(COUNT(*) AS VARCHAR), '28' FROM project2.analytics.egs_final WHERE gap_type = 'measured_gap' AND SQRT(LOG(1 + n_infractions) * LOG(1 + fine_values)) < 1
     -- n_floor_active_nominal: same floor-activation count using nominal
     -- (undeflated) fine values instead of deflated — 61, independently
     -- verified against egs_final.fine_values_nominal.
-    UNION ALL SELECT 'n_floor_active_nominal', CAST(COUNT(*) AS VARCHAR), '61' FROM project2.analytics.egs_final WHERE gap_type = 'measured_gap' AND SQRT(LOG(1 + n_infractions) * LOG(1 + fine_values_nominal)) < 1
-    UNION ALL SELECT 'missing_uf_egs_final', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.analytics.egs_final WHERE uf IS NULL
-    UNION ALL SELECT 'n_egs_ranking', CAST(COUNT(*) AS VARCHAR), '772' FROM project2.analytics.egs_ranking
-    UNION ALL SELECT 'mismatched_year_counts', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.analytics.egs_ranking WHERE n_absolute_gap + n_measured_gap + n_no_pressure != 18
-    UNION ALL SELECT 'n_muni_with_pressure', CAST(COUNT(*) AS VARCHAR), '552' FROM project2.analytics.egs_ranking WHERE n_years_pressure > 0
+    UNION ALL SELECT '11_n_floor_active_nominal', CAST(COUNT(*) AS VARCHAR), '61' FROM project2.analytics.egs_final WHERE gap_type = 'measured_gap' AND SQRT(LOG(1 + n_infractions) * LOG(1 + fine_values_nominal)) < 1
+    UNION ALL SELECT '12_missing_uf_egs_final', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.analytics.egs_final WHERE uf IS NULL
+    UNION ALL SELECT '13_n_egs_ranking', CAST(COUNT(*) AS VARCHAR), '772' FROM project2.analytics.egs_ranking
+    UNION ALL SELECT '14_mismatched_year_counts', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.analytics.egs_ranking WHERE n_absolute_gap + n_measured_gap + n_no_pressure != 18
+    UNION ALL SELECT '15_n_muni_with_pressure', CAST(COUNT(*) AS VARCHAR), '552' FROM project2.analytics.egs_ranking WHERE n_years_pressure > 0
     -- 0-fill identity: avg_egs_18y == mean(egs | pressure years) * frac(pressure years)
-    UNION ALL SELECT 'identity_mismatches', CAST(COUNT(*) AS VARCHAR), '0'
+    UNION ALL SELECT '16_identity_mismatches', CAST(COUNT(*) AS VARCHAR), '0'
         FROM project2.analytics.egs_ranking r
         JOIN (SELECT geocode_ibge, AVG(egs) AS avg_egs_pressure_years FROM project2.analytics.egs_final WHERE gap_type != 'no_pressure' GROUP BY geocode_ibge) p
             ON r.geocode_ibge = p.geocode_ibge
         WHERE r.n_years_pressure > 0
           AND ABS(r.avg_egs_18y - p.avg_egs_pressure_years * (r.n_years_pressure / 18.0)) > 0.01
-    UNION ALL SELECT 'missing_area_egs_ranking', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.analytics.egs_ranking WHERE area_municipio_km2 IS NULL
-    UNION ALL SELECT 'median_pct_desmatado', CAST(ROUND(MEDIAN(pct_desmatado), 2) AS VARCHAR), '1.1' FROM project2.analytics.egs_ranking
-    UNION ALL SELECT 'p75_pct_desmatado', CAST(ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY pct_desmatado), 2) AS VARCHAR), '3.38' FROM project2.analytics.egs_ranking
-    UNION ALL SELECT 'max_pct_desmatado', CAST(ROUND(MAX(pct_desmatado), 2) AS VARCHAR), '29.79' FROM project2.analytics.egs_ranking
+    UNION ALL SELECT '17_missing_area_egs_ranking', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.analytics.egs_ranking WHERE area_municipio_km2 IS NULL
+    UNION ALL SELECT '18_median_pct_desmatado', CAST(ROUND(MEDIAN(pct_desmatado), 2) AS VARCHAR), '1.1' FROM project2.analytics.egs_ranking
+    UNION ALL SELECT '19_p75_pct_desmatado', CAST(ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY pct_desmatado), 2) AS VARCHAR), '3.38' FROM project2.analytics.egs_ranking
+    UNION ALL SELECT '20_max_pct_desmatado', CAST(ROUND(MAX(pct_desmatado), 2) AS VARCHAR), '29.79' FROM project2.analytics.egs_ranking
 )
 SELECT check_name, actual, expected,
        CASE WHEN actual = expected THEN 'OK' ELSE 'failed' END AS status

@@ -6,7 +6,7 @@
 #
 # Purpose: fetch the IBGE municipal mesh via geobr, filter to the 772-
 #          municipality panel, reproject, and export as GeoJSON for the
-#          viz/ maps (and, if used, Power BI's reference layer). Run once;
+#          viz/ maps. Run once;
 #          re-run only if the panel's municipality set changes.
 # =============================================================================
 
@@ -106,10 +106,8 @@ if (file.exists(MESH_RAW_PATH)) {
   mesh_export <- panel_mesh_wgs84 %>%
     mutate(code_muni = as.character(as.integer(code_muni))) %>%  # geocode_ibge in
       # the parquet is text (it's an identifier, not a number to compute with);
-      # if code_muni ends up as a number in the GeoJSON, Azure Maps can fail to
-      # match it against the Power BI column when the reference layer is built —
-      # better to guarantee both sides as text here, at the source, than to
-      # find out only when assembling the visual.
+      # keeping code_muni as text here too guarantees the join key matches on
+      # both sides, regardless of what eventually reads this GeoJSON.
     select(code_muni, name_muni)   # adjust name_muni if the real column name differs
 
   # ---------------------------------------------------------------------------

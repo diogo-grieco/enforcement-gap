@@ -11,7 +11,6 @@ Autor: Diogo Grieco.
 - **DuckDB**: motor de consulta / armazenamento (`project2.duckdb`)
 - **SQL**: pipeline em 4 arquivos (`pipeline/01_staging.sql` → `pipeline/04_export.sql`)
 - **R (tidyverse)**: validação paralela dos dados brutos (`exploration/`) e suíte de visualização (`viz/`)
-- **Power BI**: dashboard opcional (consome os parquets gerados por `04_export.sql`)
 
 O pipeline roda igualmente via DBeaver, DuckDB CLI, ou o pacote `duckdb`/`DBI` em R. Nenhuma etapa depende do diretório de trabalho do cliente (ver "Configuração" abaixo).
 
@@ -76,9 +75,9 @@ Os nomes de arquivo esperados por `01_staging.sql` usam wildcard (`*`) para PROD
 
 ## Dados do IBAMA e privacidade
 
-Os autos do IBAMA, como o órgão os publica, trazem nome e CPF/CNPJ do autuado. `data/data_ibama_public/` é um recorte sem essa identificação: 13 das 84 colunas, `NOME_INFRATOR` descartado e `CPF_CNPJ_INFRATOR` trocado por um identificador aleatório e estável (`pid_`), cujo mapa é gerado uma vez, mantido local e nunca versionado.
+Os autos do IBAMA, como o órgão os publica, trazem nome e CPF/CNPJ do autuado. Em `data/data_ibama_public/`, `NOME_INFRATOR` é descartado e `CPF_CNPJ_INFRATOR` é trocado por um identificador aleatório e estável (`pid_`), cujo mapa é gerado uma vez, mantido local e nunca versionado. As demais colunas — o recorte que o pipeline efetivamente usa, listado em `data/data_ibama_public/README.md` — vêm sem alteração do CSV original.
 
-Duas coisas precisam ficar claras, porque a segunda costuma ser lida errado. O `pid_` **não é reversível**: sendo sorteado, e não derivado do CPF/CNPJ, não existe chave que o reproduza. Mas isto **não é uma anonimização**: as outras 12 colunas são idênticas ao CSV original do IBAMA, que é público *com* a identificação, e a combinação de município, data e valor identifica unicamente 74,3% das 309.116 linhas. Quem baixar a fonte refaz o vínculo. O propósito do `pid_` é permitir as contagens por identidade sem que este repositório redistribua CPF/CNPJ, não impedir a reidentificação de um dado que o órgão publica.
+O `pid_` não é reversível a partir deste repositório, mas isto **não é uma anonimização**: as demais colunas são iguais ao CSV público do IBAMA, e quem baixar a fonte original refaz o vínculo. Detalhes: [`data/data_ibama_public/README.md`](data/data_ibama_public/README.md).
 
 Detalhamento, script de derivação e nota de reprodutibilidade do pseudônimo: [`data/data_ibama_public/README.md`](data/data_ibama_public/README.md).
 
@@ -101,8 +100,9 @@ Todos os `read_csv`/`read_json_auto` do pipeline usam `getvariable('data_root') 
 ## Como rodar
 
 1. Um clone do repositório já contém todos os dados brutos versionados em `data/`, nenhum download é necessário para reproduzir os resultados publicados. Para atualizar com dados mais recentes, baixe os 5 conjuntos (ver tabela acima) para as pastas `data_*/` correspondentes.
-2. Edite `data_root` no topo de `01_staging.sql` para o caminho local do seu clone.
-3. Rode os arquivos SQL em ordem, validando o bloco de checks ao final de cada um antes de seguir:
+2. Crie uma conexão DuckDB apontando para um arquivo chamado **exatamente `project2.duckdb`**, dentro do seu clone — o arquivo não existe ainda, o motor cria no primeiro connect. O nome não é cosmético: o catálogo do DuckDB herda o nome do arquivo (sem extensão), e o pipeline referencia `project2.staging`/`project2.marts`/`project2.analytics` de forma fixa em todos os 4 arquivos SQL; qualquer outro nome de arquivo falha com `Catalog "project2" does not exist`. No DBeaver: `Database → New Database Connection → DuckDB`, indicar esse caminho, `Test Connection`, `Finish`.
+3. Edite `data_root` no topo de `01_staging.sql` para o caminho local do seu clone.
+4. Rode os arquivos SQL em ordem, validando o bloco de checks ao final de cada um antes de seguir:
    ```
    01_staging.sql    → ingestão bruta apenas (5 tabelas *_raw, tudo VARCHAR, sem filtro)
    02_marts.sql      → limpeza, tipagem e padronização (ibama_clean, prodes_clean,
@@ -112,16 +112,16 @@ Todos os `read_csv`/`read_json_auto` do pipeline usam `getvariable('data_root') 
                         média 3 anos, slope, pct_desmatado), annual_summary
    04_export.sql     → materializa 3 parquets em output/parquets/
    ```
-   No DBeaver: abrir o script, associar à conexão do `project2.duckdb`, `Execute SQL Script` (Alt+X) roda o arquivo inteiro, incluindo o bloco `== CHECKS ==` ao final.
-4. Confira os checks: cada arquivo termina em uma única query consolidada que retorna `check_name | actual | expected | status` (56 checks no total, entre os 4 arquivos; falhas aparecem no topo do grid). Qualquer linha com `status = failed` deve ser investigada antes de prosseguir, ver a nota de reprodutibilidade acima antes de assumir que é um bug. A pasta `output/parquets/` precisa existir antes de rodar o `04` (o `COPY` não cria diretórios).
-5. Rode a suíte `viz/` (ver `viz/README.md`) para gerar os gráficos e mapas a partir dos parquets, ou aponte o Power BI para os 3 arquivos em `output/parquets/`.
-6. (Opcional) Rode `exploration/exploring_script.R` para reproduzir, em R, a validação independente das mesmas decisões (filtro de desmatamento, lag do join IBAMA/PRODES, sensibilidade do limiar, EGS reconstruído), é a checagem cruzada da implementação SQL, não uma etapa obrigatória do pipeline.
+   No DBeaver: abrir o script, associar à conexão criada no passo 2, `Execute SQL Script` (Alt+X) roda o arquivo inteiro, incluindo o bloco `== CHECKS ==` ao final.
+5. Confira os checks: cada arquivo termina em uma única query consolidada que retorna `check_name | actual | expected | status` (56 checks no total, entre os 4 arquivos; falhas aparecem no topo do grid). Qualquer linha com `status = failed` deve ser investigada antes de prosseguir, ver a nota de reprodutibilidade acima antes de assumir que é um bug. A pasta `output/parquets/` precisa existir antes de rodar o `04` (o `COPY` não cria diretórios).
+6. Rode a suíte `viz/` (ver `viz/README.md`) para gerar os gráficos e mapas a partir dos parquets.
+7. (Opcional) Rode `exploration/exploring_script.R` para reproduzir, em R, a validação independente das mesmas decisões (filtro de desmatamento, lag do join IBAMA/PRODES, sensibilidade do limiar, EGS reconstruído), é a checagem cruzada da implementação SQL, não uma etapa obrigatória do pipeline.
 
 ---
 
 ## Datas de download e reprodutibilidade
 
-Os valores esperados nos blocos de check (`n_ibama = 60707`, `total_fines = 26814492927`, `n_absolute_gap = 3063`, etc.) são uma fotografia dos dados na data em que foram baixados, **não são invariantes da fonte**. IBAMA pode revisar retroativamente seus CSVs de autos de infração (cancelamentos, correções, novos registros); PRODES publica estimativa preliminar e consolida o ano mais recente meses depois. Quem baixar os dados de novo, hoje ou no futuro, pode ver checks `failed` sem que haja bug algum no pipeline, só dado mais recente que o snapshot documentado aqui.
+Os valores esperados nos blocos de check (`01_n_ibama_clean = 60707`, `06_total_fines_ibama_clean = 26814492927`, `07_n_absolute_gap = 3063`, etc.) são uma fotografia dos dados na data em que foram baixados, **não são invariantes da fonte**. IBAMA pode revisar retroativamente seus CSVs de autos de infração (cancelamentos, correções, novos registros); PRODES publica estimativa preliminar e consolida o ano mais recente meses depois. Quem baixar os dados de novo, hoje ou no futuro, pode ver checks `failed` sem que haja bug algum no pipeline, só dado mais recente que o snapshot documentado aqui.
 
 | Fonte | Data do snapshot usado | Observação |
 |---|---|---|

@@ -631,7 +631,7 @@ ipca_deflator <- ipca_raw %>%
   # raw denominator in measured_gap: min = 0.796 | p25 = 1.55 | median = 2.06 |
   # max = 4.56. The floor is inert for the mass of the data and only clips the
   # R$0.01-boundary instability cases. With nominal fines it binds 61 times
-  # (SQL check n_floor_active_nominal = 61) — deflation itself moves half the
+  # (SQL check 11_n_floor_active_nominal = 61) — deflation itself moves half the
   # cases out of the unstable zone.
   # -----------------------------------------------------------------------------
 

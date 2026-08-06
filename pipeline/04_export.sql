@@ -41,7 +41,7 @@ COPY project2.analytics.annual_summary
 ----------------------------------------------------------
 
 WITH checks AS (
-    SELECT 'export_ranking_stale' AS check_name, CAST(COUNT(*) AS VARCHAR) AS actual, '0' AS expected
+    SELECT '01_export_ranking_stale' AS check_name, CAST(COUNT(*) AS VARCHAR) AS actual, '0' AS expected
     FROM (
         SELECT pq.geocode_ibge
         FROM (SELECT geocode_ibge, row_number() OVER () AS rk
