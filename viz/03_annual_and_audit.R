@@ -1,12 +1,12 @@
 # =============================================================================
 # ENFORCEMENT GAP MONITORING SYSTEM
-# Visualization Suite — 03 annual series
+# Visualization Suite: 03 annual series
 #
 # Author: Diogo Grieco
 #
 # Purpose: National annual series (item 4): gap counts by type + total
 #          deforested area. The pipeline's own verification checks (54 checks
-#          across pipeline/01-04*.sql) are unaffected by this file — this
+#          across pipeline/01-04*.sql) are unaffected by this file; this
 #          script only ever produced a chart of them, never the checks
 #          themselves.
 # =============================================================================
@@ -14,7 +14,7 @@
 source("viz/00_setup.R")
 
 # -----------------------------------------------------------------------------
-#### 4 — national annual series
+#### 4: national annual series
 # -----------------------------------------------------------------------------
 # Two gap counts per year (primary axis) + total deforested area (secondary
 # axis). ggplot secondary axes need a manual rescale onto the primary scale,

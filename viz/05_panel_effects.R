@@ -1,6 +1,6 @@
 # =============================================================================
 # ENFORCEMENT GAP MONITORING SYSTEM
-# Visualization Suite — 05 panel effects
+# Visualization Suite: 05 panel effects
 # panel grain (two-way FE)
 #
 # Author: Diogo Grieco
@@ -9,11 +9,11 @@
 #          methodology (report figures 12, 13 and 15).
 #            12 coefficient plot summarising the five two-way FE models
 #            13 event study around a deforestation surge (autos & fines,
-#               with placebo pre-period) — the honest test of the "hangover":
+#               with placebo pre-period); the honest test of the "hangover":
 #               directional for autos, fragile (CIs cross zero)
 #            15 ridgeline of the EGS distribution by year
 #          Reproduces the Python/linearmodels pilot (ACHADOS_VARREDURA...md)
-#          with municipality + year FE and municipality-clustered SEs — the
+#          with municipality + year FE and municipality-clustered SEs: the
 #          exact estimator planned for the dissertation.
 # =============================================================================
 
@@ -75,7 +75,7 @@ m5 <- feols(log_infra_f1 ~ d_pos + d_pos:high_capacity + d_neg + log_area + log_
 # m2f: same specification as m2 with the FINE as the outcome instead of the
 # notice count. The extended report cites its coefficient (-0.399) alongside
 # m2's (-0.057); until the sixth audit this model existed only in the write-up,
-# not in the code — log_fine_f1 was built above and never used, so the published
+# not in the code: log_fine_f1 was built above and never used, so the published
 # number could not be reproduced from this repository. It is not plotted (item
 # 15 shows the notice-count models only); it exists so the citation is auditable.
 m2f <- feols(log_fine_f1 ~ d_log_area + log_area | geocode_ibge + year,
@@ -123,7 +123,7 @@ stopifnot(
 )
 
 # -----------------------------------------------------------------------------
-#### 12 — coefficient plot
+#### 12: coefficient plot
 # -----------------------------------------------------------------------------
 
 grab <- function(model, term, label) {
@@ -153,9 +153,9 @@ p_coef <- ggplot(coef_df, aes(x = estimate, y = label)) +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 13 — event study around a deforestation surge (the honest version)
+#### 13: event study around a deforestation surge (the honest version)
 # -----------------------------------------------------------------------------
-# A raw 3-municipality time series CANNOT show the "hangover" — it is a partial,
+# A raw 3-municipality time series CANNOT show the "hangover": it is a partial,
 # average effect (net of the deforestation level), not a raw-series phenomenon
 # in any single unit. The correct object is an event study: leads and lags of
 # the surge magnitude (d_pos), controlling the contemporaneous deforestation
@@ -163,7 +163,7 @@ p_coef <- ggplot(coef_df, aes(x = estimate, y = label)) +
 # proposes (sec. 8.7).
 #
 # Reading: the single-lag result in the coefficient plot above is the
-# strongest cut. Distributed across event time it WEAKENS — for autos the
+# strongest cut. Distributed across event time it WEAKENS: for autos the
 # path is directionally consistent (flat placebos, negative at 0/+1/+2) but
 # not individually significant; for fines it does not hold. Both outcomes
 # are plotted with 95% CIs so the fragility is visible, not hidden. Placebos
@@ -230,7 +230,7 @@ p_event <- ggplot(es_df, aes(x = event_time, y = estimate, colour = outcome)) +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 15 — ridgeline of EGS distribution by year
+#### 15: ridgeline of EGS distribution by year
 # -----------------------------------------------------------------------------
 # Whole distribution shifting over 2008-2025, not just the mean. EGS is
 # ordinal; a ridgeline reads shape/spread (legitimate), whereas comparing

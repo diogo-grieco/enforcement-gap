@@ -1,97 +1,49 @@
 ----------------------------------------------------------
 -- Enforcement Gap Monitoring System
--- 03_analytics.sql — index, classification, and ranking
+-- 03_analytics.sql: index, classification, and ranking
 --
 -- Author: Diogo Grieco
 --
--- SCALE NOTE: LOG() in DuckDB is base 10 (R's log() is
--- natural). The scale is monotonic: rankings don't change, but
--- absolute EGS values are on a log10 scale.
+-- SCALE NOTE: LOG() in DuckDB is base 10 (R's log() is natural). The
+-- scale is monotonic: rankings don't change, but absolute EGS values
+-- are on a log10 scale.
 --
--- METHODOLOGICAL DECISIONS:
--- (a) MATERIALITY: area_km2 >= 1 km2, an order of magnitude above
---     PRODES's minimum mapping area (6.25 ha). Sensitivity-tested: top
---     10/20/50 of egs_ranking are IDENTICAL under thresholds of 1 km2,
---     6.25 ha, and no threshold at all (top-N overlap 10/10, 20/20, 50/50
---     in every pair). Spearman across all 772 municipalities: 0.9868 for
---     1 km2 vs 6.25 ha and 0.9866 for 1 km2 vs no threshold. The threshold
---     affects only the no_pressure descriptive share (54.3%), not the
---     ranking. Kept as a robustness result, not merely an assumption.
---     (The previously quoted 0.985 / 56.2% were computed on the 805-
---     municipality panel, before the Legal Amazon scope filter in
---     02_marts.sql; recomputed on the 772 panel by the sixth audit.)
+-- METHODOLOGICAL DECISIONS (full rationale and validation in the
+-- extended report's methodology section, not restated here):
+-- (a) MATERIALITY: area_km2 >= 1 km2. Sensitivity-tested against
+--     6.25 ha and no threshold: top 10/20/50 of egs_ranking unchanged.
 -- (b) DENOMINATOR FLOOR: GREATEST(1, SQRT(LOG(1+n_infractions)
---     * LOG(1+fine_values))) — a single formula, no branching by
---     gap_type. absolute_gap is not a separate formula, it is what this
---     one produces whenever the response side is at or near zero
---     (denominator floors to 1, egs = LOG(1+area_km2)). Validated
---     against fine-grained boundary cases: the floor activates in 28 of
---     3,285 measured_gap rows (deflated fines) — exactly the R$0.01
---     boundary-instability cases it was built to absorb.
--- (c) NO_PRESSURE = 0, not NULL: egs is never NULL. No-pressure years
---     contribute exactly 0 to any average — this is what makes the
---     0-fill mean (see egs_ranking) a single, auditable formula instead
---     of a hidden two-step average.
--- (d) gap_type is a per-year descriptive label (three thresholds) but
---     does not drive the egs formula — annotation, not logic. It is
---     also not a partition for separate rankings: a single municipality
---     can (and in the current top of egs_ranking, usually does) mix
---     absolute_gap and measured_gap years, both contributing to the
---     same average. absolute_gap years score systematically HIGHER on
---     average than measured_gap years (0.723 vs 0.582 mean, deflated)
---     because the floor never discounts them — a municipality
---     chronically without any monetary response is not penalized by
---     this design, it is favored, consistent with the project's stated
---     reading that zero response is a more severe gap than
---     disproportionate response.
+--     * LOG(1+fine_values))): a single formula, no branching by
+--     gap_type. absolute_gap is what this formula produces whenever
+--     the response side is at or near zero (denominator floors to 1,
+--     egs = LOG(1+area_km2)).
+-- (c) NO_PRESSURE = 0, not NULL: egs is never NULL, so the 0-fill
+--     mean (see egs_ranking) is a single, auditable average.
+-- (d) gap_type is a per-year descriptive label (annotation, not
+--     logic) and not a partition for separate rankings: a single
+--     municipality can mix absolute_gap and measured_gap years in
+--     the same average.
 -- (e) No consecutiveness/streak rule, and no separate rankings by
---     gap_type. The 0-fill mean already dilutes isolated point events
---     without an arbitrary "N consecutive years" cutoff — see the Nova
---     Nazare (MT) worked example: highest raw severity in the dataset,
---     2/18 pressure years, correctly demoted out of the top 10 by the
---     0-fill mean alone.
+--     gap_type: the 0-fill mean already dilutes isolated point events.
 -- (f) SLOPE computed manually via COVAR_POP/VAR_POP, not DuckDB's
---     native REGR_SLOPE() — mirrors exploration/exploring_script.R's
---     cov(year, egs)/var(year) exactly (same numeric result either way,
---     since the ratio cancels the N-normalization; the manual form
---     avoids relying on an aggregate whose behavior here was never
---     independently verified). Read alongside n_years_pressure: with
---     few non-zero years the slope is driven by the position of one or
---     two points and is a weak recency signal on its own (validated:
---     single 2024 event -> slope +0.005; two events 2008/2017 -> slope
---     -0.017 — the "new" vs. "old, closed" distinction lives in the
---     second decimal place).
--- (g) pct_desmatado: total deforested area over the 18-year panel as a
---     % of the municipality's own territory (IBGE, Malha Municipal
---     Digital 2025, via marts.municipality_area). Context column, not a
---     ranking criterion — captures a different axis than avg_egs_18y
---     (proportion of the municipality already lost, not disproportion
---     of the response). Validated: distinct top list from avg_egs_18y
---     (e.g. Cujubim/RO: 29.8% of its territory deforested in the panel,
---     but avg_egs_18y = 0.578, well below the top 15 by severity).
+--     native REGR_SLOPE(); mirrors exploration/exploring_script.R's
+--     cov(year, egs)/var(year) exactly. Weak recency signal on its
+--     own when few years are non-zero; read alongside n_years_pressure.
+-- (g) pct_desmatado: total deforested area over the 18-year panel as
+--     a % of the municipality's own territory. Context column, not a
+--     ranking criterion (captures a different axis than avg_egs_18y).
 -- (h) uf/municipality_name: sourced from marts.municipality_ref.
--- fine_value is already deflated (2025 base) via analytics.ipca_deflator.
+--     fine_value is already deflated (2025 base) via analytics.ipca_deflator.
 -- (i) CALENDAR MISMATCH (not corrected): the join below (p.year =
---     i.year) compares PRODES's official year (Aug 1, year t-1 - Jul
---     31, year t) against IBAMA's calendar year (Jan-Dec, from
---     DAT_HORA_AUTO_INFRACAO) as if they were the same window. They
---     overlap for only ~7 of 12 months. The same-year-join lag
---     validation in exploration/exploring_script.R (59.2% both windows
---     t and t-1 / 4.7% only_t / 1.0% only_t1 / 35.1% never — total
---     same-year match 63.9%; shares of the 60,707 infraction records,
---     not of municipality-years) was run on this calendar-year basis,
---     not against the true PRODES window — the lag figures may partly
---     reflect this mismatch rather than genuine reporting delay. Named
---     here rather than left implicit, since a reader with
---     remote-sensing background will likely notice.
+--     i.year) compares PRODES's official year (Aug 1, year t-1 to
+--     Jul 31, year t) against IBAMA's calendar year (Jan-Dec). They
+--     overlap for only ~7 of 12 months.
 ----------------------------------------------------------
 
 ----------------------------------------------------------
 -- ipca_deflator: rebasing index (2025 = 1.0)
 -- A derived index (avg_index[2025] / avg_index[year]), not a typing
--- or filtering operation — this is why it lives here and not in
--- marts, even though its input (marts.ipca_annual) is fully clean.
--- Same category of computation as egs below.
+-- or filtering operation.
 -- Expected: 18 rows | deflator(2025) = 1.0 | deflator(2008) = 2.5826
 -- (reproduced identically in Python, R, and DuckDB against the Sidra file)
 ----------------------------------------------------------
@@ -168,9 +120,7 @@ FROM project2.analytics.egs_base;
 --
 -- avg_egs_18y (main ordering): mean of the yearly egs (0-filled for
 -- no_pressure) over the full 18-year panel. Algebraically identical
--- to mean(egs | pressure years) * fraction(pressure years) — the
--- severity x frequency composite, computed as one direct average
--- instead of a hidden two-step formula.
+-- to mean(egs | pressure years) * fraction(pressure years).
 ----------------------------------------------------------
 
 CREATE OR REPLACE TABLE project2.analytics.egs_ranking AS
@@ -197,10 +147,8 @@ LEFT JOIN project2.marts.municipality_area a
 GROUP BY e.geocode_ibge, e.mun, e.uf, e.municipality_name, a.area_municipio_km2
 -- Deterministic tiebreak: order by the UNROUNDED mean, then geocode.
 -- Ordering by the rounded column alone creates artificial ties (Monte
--- Alegre 1.10893 vs Aveiro 1.10870, both "1.109") that the geocode
--- tiebreak would resolve against the true order. AVG(e.egs) preserves
--- the real order; geocode only breaks exact ties (e.g. municipalities
--- with egs entirely zero).
+-- Alegre 1.10893 vs Aveiro 1.10870, both "1.109") resolved wrong by a
+-- geocode tiebreak against the true order.
 ORDER BY AVG(e.egs) DESC, e.geocode_ibge;
 
 ----------------------------------------------------------
@@ -222,7 +170,6 @@ ORDER BY year;
 
 ----------------------------------------------------------
 -- == ANALYTICS CHECKS ==
--- Single consolidated query, one result grid instead of one tab per check.
 ----------------------------------------------------------
 
 WITH checks AS (
@@ -230,30 +177,22 @@ WITH checks AS (
         FROM (SELECT UNNEST(RANGE(2008,2026)) AS year) years LEFT JOIN project2.analytics.ipca_deflator d USING(year) WHERE d.year IS NULL
     UNION ALL SELECT '02_invalid_deflator', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.analytics.ipca_deflator WHERE deflator IS NULL OR deflator <= 0
     UNION ALL SELECT '03_deflator_2025', CAST(ROUND(deflator, 1) AS VARCHAR), '1.0' FROM project2.analytics.ipca_deflator WHERE year = 2025
-    -- deflator_2008 pins the deflator VALUE against the real Sidra series
-    -- (2.5826). deflator_2025 = 1.0 holds by construction for ANY series; a
-    -- wrong Sidra download with the same shape (different variable, different
-    -- base) would pass every structural check without this one.
+    -- Pins the deflator VALUE against the real Sidra series; deflator_2025 = 1.0 holds by construction for any series and wouldn't catch a wrong download.
     UNION ALL SELECT '04_deflator_2008', CAST(ROUND(deflator, 4) AS VARCHAR), '2.5826' FROM project2.analytics.ipca_deflator WHERE year = 2008
     UNION ALL SELECT '05_n_egs_final', CAST(COUNT(*) AS VARCHAR), '13896' FROM project2.analytics.egs_final
     UNION ALL SELECT '06_n_no_pressure', CAST(COUNT(*) AS VARCHAR), '7548' FROM project2.analytics.egs_final WHERE gap_type = 'no_pressure'
     UNION ALL SELECT '07_n_absolute_gap', CAST(COUNT(*) AS VARCHAR), '3063' FROM project2.analytics.egs_final WHERE gap_type = 'absolute_gap'
     UNION ALL SELECT '08_n_measured_gap', CAST(COUNT(*) AS VARCHAR), '3285' FROM project2.analytics.egs_final WHERE gap_type = 'measured_gap'
     UNION ALL SELECT '09_null_egs', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.analytics.egs_final WHERE egs IS NULL
-    -- n_floor_active: the R$0.01-boundary instability cases the denominator
-    -- floor was built to absorb — the floor makes them more conservative
-    -- (lower egs) instead of letting the denominator approach 0 (deflated
-    -- fines: 28 of 3,285 measured_gap rows).
+    -- The R$0.01-boundary instability cases the denominator floor was built to absorb.
     UNION ALL SELECT '10_n_floor_active', CAST(COUNT(*) AS VARCHAR), '28' FROM project2.analytics.egs_final WHERE gap_type = 'measured_gap' AND SQRT(LOG(1 + n_infractions) * LOG(1 + fine_values)) < 1
-    -- n_floor_active_nominal: same floor-activation count using nominal
-    -- (undeflated) fine values instead of deflated — 61, independently
-    -- verified against egs_final.fine_values_nominal.
+    -- Same floor-activation count using nominal (undeflated) fine values.
     UNION ALL SELECT '11_n_floor_active_nominal', CAST(COUNT(*) AS VARCHAR), '61' FROM project2.analytics.egs_final WHERE gap_type = 'measured_gap' AND SQRT(LOG(1 + n_infractions) * LOG(1 + fine_values_nominal)) < 1
     UNION ALL SELECT '12_missing_uf_egs_final', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.analytics.egs_final WHERE uf IS NULL
     UNION ALL SELECT '13_n_egs_ranking', CAST(COUNT(*) AS VARCHAR), '772' FROM project2.analytics.egs_ranking
     UNION ALL SELECT '14_mismatched_year_counts', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.analytics.egs_ranking WHERE n_absolute_gap + n_measured_gap + n_no_pressure != 18
     UNION ALL SELECT '15_n_muni_with_pressure', CAST(COUNT(*) AS VARCHAR), '552' FROM project2.analytics.egs_ranking WHERE n_years_pressure > 0
-    -- 0-fill identity: avg_egs_18y == mean(egs | pressure years) * frac(pressure years)
+    -- 0-fill identity: avg_egs_18y == mean(egs | pressure years) * frac(pressure years).
     UNION ALL SELECT '16_identity_mismatches', CAST(COUNT(*) AS VARCHAR), '0'
         FROM project2.analytics.egs_ranking r
         JOIN (SELECT geocode_ibge, AVG(egs) AS avg_egs_pressure_years FROM project2.analytics.egs_final WHERE gap_type != 'no_pressure' GROUP BY geocode_ibge) p

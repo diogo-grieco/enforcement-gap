@@ -1,17 +1,17 @@
 # =============================================================================
 # ENFORCEMENT GAP MONITORING SYSTEM
-# Visualization Suite — 07 offender network
+# Visualization Suite: 07 offender network
 # IBAMA raw data (cached)
 #
 # Author: Diogo Grieco
 #
 # Purpose: Multi-municipality offender network (item 18). Bipartite graph of
 #          offenders (CPF/CNPJ) fined for deforestation in 3+ distinct
-#          municipalities, linked to those municipalities — the territorial
+#          municipalities, linked to those municipalities: the territorial
 #          reach of repeat offenders, invisible in the official municipality
 #          aggregates. Self-contained: reads the same raw IBAMA cache as
 #          04_raw_ibama.R via load_ibama_clean() (00_load_ibama_clean.R),
-#          which builds the cache itself if it doesn't exist yet — running
+#          which builds the cache itself if it doesn't exist yet; running
 #          04 first is faster (skips the 18-CSV read) but not required.
 # =============================================================================
 

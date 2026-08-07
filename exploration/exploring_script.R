@@ -123,7 +123,7 @@ ncol(ibama_raw)
 #   Não se Aplica: 24,631 | Queimada: 3,019 | Desmatamento e Queimada: 2,462
 #   NAs concentrated 2008–2012
 #   "Desmatamento e Queimada" (2,051 valid): 1,579/1,606 Flora records are
-#   409999 — excluded for same reason as main filter (see below)
+#   409999: excluded for same reason as main filter (see below)
 #
 # count(DES_STATUS_FORMULARIO)
 #   Lavrado: 291,748 | Cancelado: 12,262 | NA: 4,201 | (others < 600)
@@ -133,7 +133,7 @@ ncol(ibama_raw)
 #
 # count(COD_INFRACAO)
 #   356 distinct codes; 6 identified as deforestation-specific (see below)
-#   409999 is the largest (77,872) — generic code, see exclusion rationale
+#   409999 is the largest (77,872): generic code, see exclusion rationale
 # -----------------------------------------------------------------------------
 
 DEFORESTATION_CODES <- c(
@@ -625,13 +625,13 @@ ipca_deflator <- ipca_raw %>%
 # =============================================================================
 
   # -----------------------------------------------------------------------------
-  #### Decision 1 — denominator floor: how often does it bind?
+  #### Decision 1. denominator floor: how often does it bind?
   
   # Result (deflated fines): floor binds in 28/3,285 measured_gap years (0.9%);
   # raw denominator in measured_gap: min = 0.796 | p25 = 1.55 | median = 2.06 |
   # max = 4.56. The floor is inert for the mass of the data and only clips the
   # R$0.01-boundary instability cases. With nominal fines it binds 61 times
-  # (SQL check 11_n_floor_active_nominal = 61) — deflation itself moves half the
+  # (SQL check 11_n_floor_active_nominal = 61); deflation itself moves half the
   # cases out of the unstable zone.
   # -----------------------------------------------------------------------------
 
@@ -654,12 +654,12 @@ ipca_deflator <- ipca_raw %>%
 
 
   # -----------------------------------------------------------------------------
-  #### Decision 2 — materiality threshold: ranking sensitivity
+  #### Decision 2. materiality threshold: ranking sensitivity
   
   # Result: ranking by 0-fill mean EGS computed under three thresholds
   # (1 km2 | 6.25 ha = PRODES minimum mapping unit | none) gives IDENTICAL
   # top 10/20/50 and Spearman = 0.9868 (1 km2 vs 6.25 ha) / 0.9866 (1 km2 vs
-  # none) across all 772 municipalities — although 3,291 rows (23.7%) are
+  # none) across all 772 municipalities; although 3,291 rows (23.7%) are
   # reclassified between thresholds. The threshold affects the descriptive
   # statistic (54.3% no_pressure), not the ranking.
   # Citable as a robustness result.
@@ -702,17 +702,17 @@ ipca_deflator <- ipca_raw %>%
   
   
  # -----------------------------------------------------------------------------
-    #### Decision 3 — 0-fill mean as main ordering
+    #### Decision 3: 0-fill mean as main ordering
     
     # Identity: mean_0fill == mean(EGS | pressure years) * frac(pressure years).
     # The 0-fill mean IS the severity x frequency composite, written as one
-    # formula — the design choice is explicit here, not hidden.
+    # formula; the design choice is explicit here, not hidden.
     #
     # Result (552 municipalities with >= 1 pressure year, deflated):
     #   Pearson(severity, frequency) = 0.621 | Spearman = 0.696
     #   -> the two dimensions largely co-move; top-10 overlap between pure
     #      severity and 0-fill = 9/10.
-    #   Only divergent case: Nova Nazare (MT) — highest pure severity of the
+    #   Only divergent case: Nova Nazare (MT), highest pure severity of the
     #   dataset (1.384; isolated episodes of 11 km2 in 2008 and 63 km2 in 2017,
     #   2/18 pressure years) drops to 0.154 under 0-fill and leaves the top 10.
     #   EDITORIAL DECISION, kept: a persistent-gap monitoring system demotes
@@ -753,15 +753,15 @@ ipca_deflator <- ipca_raw %>%
     )
   
 
-  #### Decision 4 — current situation: recent mean AND OLS slope
+  #### Decision 4. current situation: recent mean AND OLS slope
   
-  # Result: slope alone is a weak recency signal when few years are non-zero —
+  # Result: slope alone is a weak recency signal when few years are non-zero;
   # Palmeiras do Tocantins (single event, 2024): slope = +0.005
   # Nova Nazare (events 2008/2017):              slope = -0.017
   # The "new problem" vs "old, closed problem" distinction lives in the second
   # decimal place. Both columns kept BUT read alongside n_years_pressure as a
   # reliability indicator; recent mean (2023-2025) is the legible companion.
-  # NOTE: window includes 2025 — last panel year subject to revision (PRODES
+  # NOTE: window includes 2025, last panel year subject to revision (PRODES
   # estimate not consolidated at download date).
   # -----------------------------------------------------------------------------
   

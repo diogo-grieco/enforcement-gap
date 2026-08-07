@@ -1,18 +1,18 @@
 # =============================================================================
 # ENFORCEMENT GAP MONITORING SYSTEM
-# Visualization Suite — 00 load raw IBAMA (shared)
+# Visualization Suite: 00 load raw IBAMA (shared)
 #
 # Author: Diogo Grieco
 #
 # Purpose: Single source of truth for reading + filtering the raw IBAMA CSVs,
 #          shared by 04_raw_ibama.R (report figures 7-11) and 06_offender_network.R
-#          (item 18) — both need the same deforestation-type filter over the
+#          (item 18); both need the same deforestation-type filter over the
 #          same raw notices, and keeping one copy of that filter means the two
 #          scripts can't silently drift apart if it's ever revised.
 #          Not sourced by 00_setup.R: reading the 18 yearly CSVs is the
 #          slowest step in this suite, so only the two scripts that actually
 #          need it pay the cost. load_ibama_clean() builds its own cache if
-#          missing — call it directly, no run-order requirement on either
+#          missing: call it directly, no run-order requirement on either
 #          script that uses it.
 # =============================================================================
 
@@ -33,7 +33,7 @@ DEFORESTATION_CODES <- c("409907","409901","452001","430001","431003","468001")
 #   ibama - raw notices, filtered to the 772 panel municipalities
 #   defor - ibama, filtered to deforestation-type (mirrors marts.ibama_clean, 3 cases)
 #   clean - defor, filtered to SIT_CANCELADO == "N" & DES_STATUS_FORMULARIO == "Lavrado"
-#           (same status filter as the pipeline; does NOT drop NA CPF_CNPJ_INFRATOR —
+#           (same status filter as the pipeline; does NOT drop NA CPF_CNPJ_INFRATOR;
 #           callers that need a valid offender id, e.g. 07, filter that locally)
 load_ibama_clean <- function() {
   raw_cache_path <- file.path(PATH_CACHE, FILE_RAW_CACHE)

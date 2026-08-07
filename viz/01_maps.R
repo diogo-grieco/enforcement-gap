@@ -1,6 +1,6 @@
 # =============================================================================
 # ENFORCEMENT GAP MONITORING SYSTEM
-# Visualization Suite — 01 static maps
+# Visualization Suite: 01 static maps
 # ranking x mesh
 #
 # Author: Diogo Grieco
@@ -55,7 +55,7 @@ outline_layer <- geom_sf(data = top20_shapes, fill = NA, colour = "#1a3d2e",
                          linewidth = 0.6, inherit.aes = FALSE)
 
 # -----------------------------------------------------------------------------
-#### 1 — deforestation (absolute km2)
+#### 1: deforestation (absolute km2)
 # -----------------------------------------------------------------------------
 # Best match to the EGS pattern (Spearman 0.97 with EGS): the EGS numerator
 # uses absolute area, not the area ratio.
@@ -67,7 +67,7 @@ m_defor_abs <- ggplot(map_data) +
   theme_map
 
 # -----------------------------------------------------------------------------
-#### 2 — mean 18y EGS
+#### 2: mean 18y EGS
 # -----------------------------------------------------------------------------
 
 m_egs <- ggplot(map_data) +
@@ -77,7 +77,7 @@ m_egs <- ggplot(map_data) +
   theme_map
 
 # -----------------------------------------------------------------------------
-#### 3 — bivariate map (colour = pct quintile, bubble = total fines)
+#### 3: bivariate map (colour = pct quintile, bubble = total fines)
 # -----------------------------------------------------------------------------
 # The dashboard's central map, in ggplot: choropleth of pct_desmatado quintile
 # + bubbles with AREA proportional to total fines (scale_size_area) + top-20

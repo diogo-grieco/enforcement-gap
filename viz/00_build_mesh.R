@@ -25,7 +25,7 @@ stopifnot(
 MESH_RAW_PATH <- "data/data_ibge/malha_772_amazonia_legal.geojson"
 
 # -----------------------------------------------------------------------------
-#### 2-6. Fetch, filter, reproject, trim, export — SKIPPED if the unsimplified
+#### 2-6. Fetch, filter, reproject, trim, export: SKIPPED if the unsimplified
 ####       772-polygon file already exists on disk (e.g. left over from
 ####       filtering the panel from 805 to 772: same geometry, same 772
 ####       geocodes, no need to re-hit geobr/IBGE for it). Delete
@@ -35,7 +35,7 @@ MESH_RAW_PATH <- "data/data_ibge/malha_772_amazonia_legal.geojson"
 
 if (file.exists(MESH_RAW_PATH)) {
 
-  message("Found existing ", MESH_RAW_PATH, " — reusing it, skipping geobr fetch.")
+  message("Found existing ", MESH_RAW_PATH, ", reusing it, skipping geobr fetch.")
   mesh_export <- st_read(MESH_RAW_PATH, quiet = TRUE) %>%
     mutate(code_muni = as.character(code_muni))
 
@@ -54,11 +54,11 @@ if (file.exists(MESH_RAW_PATH)) {
   # ---------------------------------------------------------------------------
   # geobr::read_municipality() is an official wrapper over IBGE's Malha
   # Municipal Digital. The code_muni column comes out in the same 7-digit
-  # format as your geocode_ibge — you can join directly, no need to match
+  # format as your geocode_ibge: you can join directly, no need to match
   # by name.
   #
   # simplified = TRUE (default) already applies st_simplify preserving
-  # topology — good enough for a map visualization. For any real spatial
+  # topology; good enough for a map visualization. For any real spatial
   # analysis (not the case here) you'd want simplified = FALSE.
 
   # Run this line first to check whether 2022 is available in your installed
@@ -67,12 +67,12 @@ if (file.exists(MESH_RAW_PATH)) {
 
   brazil_mesh <- read_municipality(code_muni = "all", year = 2022, simplified = TRUE)
 
-  # Check the column names — they can vary slightly between package versions
+  # Check the column names: they can vary slightly between package versions
   # (e.g. name_muni vs. nm_mun):
   names(brazil_mesh)
 
   # ---------------------------------------------------------------------------
-  #### 3. Filter to the panel's 772 municipalities — join by geocode, with checkpoint
+  #### 3. Filter to the panel's 772 municipalities: join by geocode, with checkpoint
   # ---------------------------------------------------------------------------
   panel_mesh <- brazil_mesh %>%
     filter(code_muni %in% panel_geocodes)
@@ -89,7 +89,7 @@ if (file.exists(MESH_RAW_PATH)) {
   # ---------------------------------------------------------------------------
   #### 4. Reproject to WGS84 (EPSG:4326)
   # ---------------------------------------------------------------------------
-  # geobr delivers in SIRGAS 2000 (EPSG:4674) — IBGE's official datum.
+  # geobr delivers in SIRGAS 2000 (EPSG:4674), IBGE's official datum.
   # GeoJSON (RFC 7946) and Azure Maps expect WGS84. The numeric difference
   # between the two datums is small in Brazil, but the correct fix is
   # st_transform(), not just writing it out as if it were already WGS84.
@@ -100,7 +100,7 @@ if (file.exists(MESH_RAW_PATH)) {
   #### 5. Trim columns before exporting
   # ---------------------------------------------------------------------------
   # The join with the ranking/panel only needs the key (code_muni). Any extra
-  # attribute is dead weight in the file — the tooltips/labels use the columns
+  # attribute is dead weight in the file: the tooltips/labels use the columns
   # from the parquet (egs_ranking), not the GeoJSON's properties.
 
   mesh_export <- panel_mesh_wgs84 %>%
@@ -124,12 +124,12 @@ if (file.exists(MESH_RAW_PATH)) {
 }
 
 # -----------------------------------------------------------------------------
-#### 7. Simplify further — this is the file viz/00_setup.R actually reads
+#### 7. Simplify further: this is the file viz/00_setup.R actually reads
 # -----------------------------------------------------------------------------
 # Azure Maps' own documentation recommends mapshaper with the Visvalingam
 # algorithm for large reference layers. In R that's rmapshaper, a wrapper
 # around the same mapshaper. FILE_MESH in 00_setup.R points at the
-# _simplificada output below, not at the file from step 6 — this step is
+# _simplificada output below, not at the file from step 6; this step is
 # not optional for the viz/ suite to run; it always executes as part of a
 # full source() of this script (install rmapshaper once if missing).
 

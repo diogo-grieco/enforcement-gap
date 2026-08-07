@@ -1,13 +1,13 @@
 # =============================================================================
 # ENFORCEMENT GAP MONITORING SYSTEM
-# Visualization Suite — 02 ranking panels
+# Visualization Suite: 02 ranking panels
 # ranking & panel grain
 #
 # Author: Diogo Grieco
 #
 # Purpose: Non-spatial panels on the municipality-grain ranking (report
 #          figures 5, 6 and 16).
-#            5   log-log scatter (deforestation x fines) — the EGS formula drawn
+#            5   log-log scatter (deforestation x fines): the EGS formula drawn
 #            6   historical x recent quadrant (avg_egs_18y vs avg_egs_3y)
 #            16  small multiples: annual EGS of the 5 anchor cases
 # =============================================================================
@@ -16,7 +16,7 @@ source("viz/00_setup.R")
 library(ggrepel)   # non-overlapping point labels
 
 # -----------------------------------------------------------------------------
-#### 5 — log-log scatter (the EGS formula drawn)
+#### 5: log-log scatter (the EGS formula drawn)
 # -----------------------------------------------------------------------------
 # X = total deforested km2 (log10), Y = total fines (log10). On the reference
 # diagonal = proportional response; below it = enforcement gap. Colour =
@@ -60,7 +60,7 @@ stopifnot("anchors: expected 5 anchor cases" = nrow(anchors) == length(ANCHOR_NA
 # proportionality reference, NOT the EGS = 1 locus: EGS also depends on
 # n_infractions, which is on neither axis, and is annual, while this plot
 # aggregates 18 years. Earlier versions of the code and of the figure captions
-# called it "the EGS = 1 boundary" — corrected by the sixth audit.
+# called it "the EGS = 1 boundary"; corrected by the sixth audit.
 p_scatter <- ggplot(scatter_df, aes(x = total_desmatado_km2, y = total_fines_plot)) +
   geom_abline(slope = 1, intercept = log10(1e5), linetype = "dashed", colour = "grey60") +
   geom_point(aes(colour = dominant), alpha = 0.6, size = 1.8) +
@@ -70,7 +70,7 @@ p_scatter <- ggplot(scatter_df, aes(x = total_desmatado_km2, y = total_fines_plo
   # seed: ggrepel places labels with random jitter AT DRAW TIME, so the same
   # plot object rendered twice yields slightly different label positions (and
   # a PNG that differs byte-for-byte). A fixed seed makes the output
-  # deterministic — the figure on disk stays identical to the one embedded in
+  # deterministic: the figure on disk stays identical to the one embedded in
   # the deliverables across reruns. set.seed() before the plot would NOT work.
   geom_text_repel(data = anchors, aes(label = municipality_name),
                   size = 3, min.segment.length = 0, seed = 42) +
@@ -84,7 +84,7 @@ p_scatter <- ggplot(scatter_df, aes(x = total_desmatado_km2, y = total_fines_plo
   theme(legend.position = "right")
 
 # -----------------------------------------------------------------------------
-#### 6 — historical x recent quadrant
+#### 6: historical x recent quadrant
 # -----------------------------------------------------------------------------
 # X = avg_egs_18y (history), Y = avg_egs_3y (2023-25). Above the identity line
 # = worsening recently; below = improving. Size = years of pressure.
@@ -98,7 +98,7 @@ p_quadrant <- ggplot(ranking, aes(x = avg_egs_18y, y = avg_egs_3y)) +
   scale_x_continuous(labels = number) +
   scale_y_continuous(labels = number) +
   # order: with two guides and neither declaring an order, ggplot2 does not
-  # guarantee a stable arrangement between sessions — the seventh audit caught
+  # guarantee a stable arrangement between sessions; the seventh audit caught
   # the colour and size legends swapping places on a rerun, with no data change,
   # which silently breaks the byte-identity between the PNG on disk and the one
   # embedded in the deliverables. Colour first: it is the primary encoding and
@@ -110,7 +110,7 @@ p_quadrant <- ggplot(ranking, aes(x = avg_egs_18y, y = avg_egs_3y)) +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 16 — small multiples: annual EGS of the 5 anchor cases
+#### 16. small multiples: annual EGS of the 5 anchor cases
 # -----------------------------------------------------------------------------
 
 anchor_series <- final %>%

@@ -1,6 +1,6 @@
 # =============================================================================
 # ENFORCEMENT GAP MONITORING SYSTEM
-# Visualization Suite — 04 raw IBAMA visuals
+# Visualization Suite: 04 raw IBAMA visuals
 # IBAMA raw data (84 columns)
 #
 # Author: Diogo Grieco
@@ -14,7 +14,7 @@
 #            11    embargo/apreensão share by EGS quintile
 #          Slowest script (reads the 18 yearly CSVs via load_ibama_clean(),
 #          see 00_load_ibama_clean.R); caches a filtered parquet on first run
-#          and reuses it afterwards. Independent of 06_offender_network.R —
+#          and reuses it afterwards. Independent of 06_offender_network.R;
 #          either can run first, each builds the cache if it's missing.
 # =============================================================================
 
@@ -32,7 +32,7 @@ defor <- ibama_clean$defor
 clean <- ibama_clean$clean
 
 # -----------------------------------------------------------------------------
-#### 7 — Lorenz curve of fine concentration across offenders
+#### 7: Lorenz curve of fine concentration across offenders
 # -----------------------------------------------------------------------------
 
 offender_totals <- clean %>%
@@ -70,7 +70,7 @@ p_lorenz <- ggplot(lorenz, aes(x = cum_offenders, y = cum_fine)) +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 8 and 9 — cancellation-rate series + by state
+#### 8 and 9: cancellation-rate series + by state
 # -----------------------------------------------------------------------------
 
 cancel_year <- defor %>%
@@ -122,9 +122,9 @@ p_cancel_uf <- ggplot(cancel_uf, aes(x = rate, y = UF)) +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 10 — fact -> notice lag histogram
+#### 10: fact -> notice lag histogram
 # -----------------------------------------------------------------------------
-# Only ~28% of clean autos carry DT_FATO_INFRACIONAL — partial, possibly
+# Only ~28% of clean autos carry DT_FATO_INFRACIONAL: partial, possibly
 # non-random sample (better-staffed units may fill it more often).
 
 lag_df <- clean %>%
@@ -153,7 +153,7 @@ p_lag <- ggplot(lag_df, aes(x = lag_days)) +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 11 — embargo / apreensão share by EGS quintile
+#### 11: embargo / apreensão share by EGS quintile
 # -----------------------------------------------------------------------------
 
 muni_instr <- clean %>%

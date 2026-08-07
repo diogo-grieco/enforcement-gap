@@ -75,7 +75,7 @@ Os nomes de arquivo esperados por `01_staging.sql` usam wildcard (`*`) para PROD
 
 ## Dados do IBAMA e privacidade
 
-Os autos do IBAMA, como o órgão os publica, trazem nome e CPF/CNPJ do autuado. Em `data/data_ibama_public/`, `NOME_INFRATOR` é descartado e `CPF_CNPJ_INFRATOR` é trocado por um identificador aleatório e estável (`pid_`), cujo mapa é gerado uma vez, mantido local e nunca versionado. As demais colunas — o recorte que o pipeline efetivamente usa, listado em `data/data_ibama_public/README.md` — vêm sem alteração do CSV original.
+Os autos do IBAMA, como o órgão os publica, trazem nome e CPF/CNPJ do autuado. Em `data/data_ibama_public/`, `NOME_INFRATOR` é descartado e `CPF_CNPJ_INFRATOR` é trocado por um identificador aleatório e estável (`pid_`), cujo mapa é gerado uma vez, mantido local e nunca versionado. As demais colunas (o recorte que o pipeline efetivamente usa, listado em `data/data_ibama_public/README.md`) vêm sem alteração do CSV original.
 
 O `pid_` não é reversível a partir deste repositório, mas isto **não é uma anonimização**: as demais colunas são iguais ao CSV público do IBAMA, e quem baixar a fonte original refaz o vínculo. Detalhes: [`data/data_ibama_public/README.md`](data/data_ibama_public/README.md).
 
@@ -100,7 +100,7 @@ Todos os `read_csv`/`read_json_auto` do pipeline usam `getvariable('data_root') 
 ## Como rodar
 
 1. Um clone do repositório já contém todos os dados brutos versionados em `data/`, nenhum download é necessário para reproduzir os resultados publicados. Para atualizar com dados mais recentes, baixe os 5 conjuntos (ver tabela acima) para as pastas `data_*/` correspondentes.
-2. Crie uma conexão DuckDB apontando para um arquivo chamado **exatamente `project2.duckdb`**, dentro do seu clone — o arquivo não existe ainda, o motor cria no primeiro connect. O nome não é cosmético: o catálogo do DuckDB herda o nome do arquivo (sem extensão), e o pipeline referencia `project2.staging`/`project2.marts`/`project2.analytics` de forma fixa em todos os 4 arquivos SQL; qualquer outro nome de arquivo falha com `Catalog "project2" does not exist`. No DBeaver: `Database → New Database Connection → DuckDB`, indicar esse caminho, `Test Connection`, `Finish`.
+2. Crie uma conexão DuckDB apontando para um arquivo chamado **exatamente `project2.duckdb`** dentro do seu clone (não existe ainda, o motor cria no primeiro connect). O catálogo herda o nome do arquivo, e o pipeline referencia `project2.staging`/`project2.marts`/`project2.analytics` fixo nos 4 SQL; outro nome falha com `Catalog "project2" does not exist`.
 3. Edite `data_root` no topo de `01_staging.sql` para o caminho local do seu clone.
 4. Rode os arquivos SQL em ordem, validando o bloco de checks ao final de cada um antes de seguir:
    ```
@@ -112,7 +112,6 @@ Todos os `read_csv`/`read_json_auto` do pipeline usam `getvariable('data_root') 
                         média 3 anos, slope, pct_desmatado), annual_summary
    04_export.sql     → materializa 3 parquets em output/parquets/
    ```
-   No DBeaver: abrir o script, associar à conexão criada no passo 2, `Execute SQL Script` (Alt+X) roda o arquivo inteiro, incluindo o bloco `== CHECKS ==` ao final.
 5. Confira os checks: cada arquivo termina em uma única query consolidada que retorna `check_name | actual | expected | status` (56 checks no total, entre os 4 arquivos; falhas aparecem no topo do grid). Qualquer linha com `status = failed` deve ser investigada antes de prosseguir, ver a nota de reprodutibilidade acima antes de assumir que é um bug. A pasta `output/parquets/` precisa existir antes de rodar o `04` (o `COPY` não cria diretórios).
 6. Rode a suíte `viz/` (ver `viz/README.md`) para gerar os gráficos e mapas a partir dos parquets.
 7. (Opcional) Rode `exploration/exploring_script.R` para reproduzir, em R, a validação independente das mesmas decisões (filtro de desmatamento, lag do join IBAMA/PRODES, sensibilidade do limiar, EGS reconstruído), é a checagem cruzada da implementação SQL, não uma etapa obrigatória do pipeline.
@@ -165,7 +164,7 @@ Mudanças de substância entre versões, incluindo as que alteraram números pub
 ## Limitações conhecidas (resumo, detalhamento em `deliverables/EGMS_03_relatorio_estendido.docx`)
 
 - O índice mede lacuna de fiscalização *federal*. Só autos do IBAMA entram como resposta; aparatos estaduais ativos (SEMAS-PA, IPAAM-AM) não são capturados. Um EGS alto é compatível com ausência real, substituição estadual ou presença federal sem efeito.
-- Dentro do próprio dado federal, só entram autos de tipo desmatamento. Nos vinte municípios do topo, são 1.187 dos 3.513 que o IBAMA lavrou no período, ou 34%: o resto é fauna, pesca, controle ambiental, cadastro e unidade de conservação — esta última a mesma lacuna do ICMBio que Porto de Moz ilustra. Onde o vetor da supressão é garimpo, a resposta federal chega por instrumento que o índice não pontua.
+- Dentro do próprio dado federal, só entram autos de tipo desmatamento. Nos vinte municípios do topo, são 1.187 dos 3.513 que o IBAMA lavrou no período, ou 34%: o resto é fauna, pesca, controle ambiental, cadastro e unidade de conservação (esta última a mesma lacuna do ICMBio que Porto de Moz ilustra). Onde o vetor da supressão é garimpo, a resposta federal chega por instrumento que o índice não pontua.
 - PRODES ≠ desmatamento ilegal. O índice não distingue supressão autorizada (AUTEX/DOF) de ilegal; casos verificados em Barra do Bugres/MT, Oriximiná, Autazes e Acará.
 - Resposta = autos lavrados. Embargos, apreensões, ação penal e arrecadação efetiva das multas não entram.
 - EGS é ordinal na prática. A ordenação é robusta, testada por sensibilidade; distâncias entre scores não têm interpretação direta.

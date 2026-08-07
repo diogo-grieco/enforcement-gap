@@ -1,10 +1,10 @@
 # =============================================================================
 # ENFORCEMENT GAP MONITORING SYSTEM
-# Visualization Suite — 00 setup
+# Visualization Suite: 00 setup
 #
 # Author: Diogo Grieco
 #
-# Purpose: Shared entry point for every viz_*.R script — load packages, declare
+# Purpose: Shared entry point for every viz_*.R script: load packages, declare
 #          paths and files, declare data integrity checkpoints, load the feeds
 #          with stopifnot() guards, and define the shared palette, theme and
 #          quantile helper. Sourced by each downstream script, never run alone.
@@ -86,7 +86,7 @@ stopifnot(
 #### Municipal mesh (for every map)
 # -----------------------------------------------------------------------------
 # code_muni comes out of the GeoJSON numeric; geocode_ibge in the parquets is
-# text. Force both sides to the SAME type (character 7-digit) before any join —
+# text. Force both sides to the SAME type (character 7-digit) before any join;
 # never join by name (5 homonym pairs in the panel).
 
 muni_mesh <- st_read(file.path(PATH_IBGE, FILE_MESH), quiet = TRUE) %>%
@@ -102,7 +102,7 @@ stopifnot(
 #### Shared palette, themes and quantile helper
 # -----------------------------------------------------------------------------
 # Sequential single-hue quintile palette (darker = higher), matching the
-# dashboard mockup. EGS and pct_desmatado are ORDINAL — always colour by
+# dashboard mockup. EGS and pct_desmatado are ORDINAL: always colour by
 # rank-quintile, never by a continuous raw value.
 
 QUINTILE_PALETTE <- c("1" = "#f5f0e1", "2" = "#e8d9a8", "3" = "#d9ae6a",
@@ -113,7 +113,7 @@ GAP_PALETTE <- c(absolute_gap = "#a63d2f", measured_gap = "#c98a3d",
                  no_pressure  = "#b9c2b6")
 
 # Portuguese display labels for gap_type, for any chart that shows this
-# category as axis text or a legend (values stay in English everywhere else —
+# category as axis text or a legend (values stay in English everywhere else;
 # this is display-only, never used to filter/join/compare).
 GAP_LABELS <- c(absolute_gap = "lacuna absoluta", measured_gap = "lacuna medida",
                 no_pressure  = "sem pressão")
@@ -130,7 +130,7 @@ theme_chart <- theme_minimal(base_size = 12) +
         plot.subtitle = element_text(colour = "#5a655c"))
 
 # Rank-quintile helper: ntile(x, 5) splits by RANK into 5 equal-sized groups
-# (~161 municipalities each) — the correct binning for the long-tailed
+# (~161 municipalities each): the correct binning for the long-tailed
 # variables (equal-width bins would crush everything into bin 1).
 q5 <- function(x) ntile(x, 5)
 
@@ -140,7 +140,7 @@ q5 <- function(x) ntile(x, 5)
 
 dir.create(PATH_OUT, showWarnings = FALSE, recursive = TRUE)
 
-message("setup ok — ranking: ", nrow(ranking),
+message("setup ok, ranking: ", nrow(ranking),
         " | final: ", nrow(final),
         " | annual: ", nrow(annual),
         " | mesh: ", nrow(muni_mesh))

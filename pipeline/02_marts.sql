@@ -1,37 +1,22 @@
 ----------------------------------------------------------
 -- Enforcement Gap Monitoring System
--- 02_marts.sql — clean, typed tables
+-- 02_marts.sql: clean, typed tables
 --
 -- Author: Diogo Grieco
 --
 -- Purpose: filter, type, and standardize the columns consumed
---          by the downstream layers (no SELECT *).
+--          by the downstream layers.
 ----------------------------------------------------------
 
 ----------------------------------------------------------
 -- ibama_clean
--- Filter: 3 cases, mirrors exploration/exploring_script.R (independent
--- R implementation of the same filter, for cross-checking).
--- DECISION (date column): DAT_HORA_AUTO_INFRACAO (notice drafted,
---   0% NA) instead of DT_FATO_INFRACIONAL (71% NA in the filtered
---   base). Same-year join validated in exploration: 59.2% of
---   infraction records (n = 60,707; unit is the notice, not the
---   municipality-year) match BOTH windows (material pressure in year
---   t AND t-1); only_t (same-year only) = 4.7% — total same-year
---   match: 63.9% (59.2 + 4.7); only_t1 (would match ONLY with a
---   one-year lag) = 1.0%.
--- KNOWN LIMITATION: the PRODES "year" is not a calendar year — INPE's
---   official rate covers Aug 1 (year t-1) to Jul 31 (year t) — while
---   IBAMA's `year` here is calendar (Jan-Dec), from
---   DAT_HORA_AUTO_INFRACAO. The same-year join (p.year = i.year in
---   03_analytics.sql) therefore compares windows that only fully
---   overlap for ~7 of 12 months; the lag validation cited above was
---   run on this same calendar-year basis, not against the true
---   Aug-Jul PRODES window. Not corrected — documented so no reader
---   assumes the two "year" columns mean the same thing.
--- TRY_CAST (not CAST) on the date parse: a malformed value becomes
---   NULL, caught by the null_year check below, instead of aborting
---   the script before that check ever runs.
+-- Filter: 3 cases, mirrors exploration/exploring_script.R.
+-- DECISION (date column): DAT_HORA_AUTO_INFRACAO, not DT_FATO_INFRACIONAL
+--   (NA rates compared in exploring_script.R).
+-- Note: year here is calendar (Jan-Dec), not PRODES's Aug-Jul window;
+--   cf. 03_analytics.sql and the extended report (decision table, item 6).
+-- TRY_CAST (not CAST): malformed dates become NULL, caught by the
+--   null_year check below, not an aborted script.
 -- Expected: 60,707 rows
 ----------------------------------------------------------
 
@@ -66,20 +51,6 @@ WHERE
 -- prodes_clean
 -- Expected: 13,896 rows | 772 geocodes (767 names; 5 homonyms)
 -- geocode_ibge is already a clean 7-digit string in the raw data
---
--- SCOPE FILTER (Legal Amazon only): the TerraBrasilis municipal export
---   labelled "legal_amazon" ships 805 geocodes, but 33 of them are in
---   states OUTSIDE the Legal Amazon — GO (18), PI (6), MS (5), BA (4) —
---   each with area_km2 = 0 in every one of the 18 years (they carry no
---   PRODES-mapped deforestation). 805 - 33 = 772, the CURRENT official Legal
---   Amazon count — due to become 773 (see missing_legal_amazon_munis below);
---   both figures predate Boa Esperança do Norte/MT, so the match is a
---   coincidence to watch, not a confirmation. We keep only the 9 Legal Amazon
---   state prefixes so the panel matches its declared universe; the 33
---   zero-deforestation out-of-scope rows were inflating the descriptive
---   "no pressure" share (and surfaced non-Legal-Amazon states in the
---   by-state cancellation chart). The ranking is unaffected (all 33 are
---   EGS 0 at the bottom). This is a filtering decision — belongs in marts.
 ----------------------------------------------------------
 
 CREATE OR REPLACE TABLE project2.marts.prodes_clean AS
@@ -97,19 +68,9 @@ WHERE SUBSTR(geocode_ibge, 1, 2) IN (
 
 ----------------------------------------------------------
 -- municipality_ref
--- Extracts name/uf from the raw nested JSON. Source of truth for
--- name/state in every category, including absolute_gap (no record
--- in ibama_clean).
---
--- Actual JSON structure (confirmed, not assumed):
---   id (int, 7 digits) | nome (string) |
---   microrregiao.mesorregiao.UF.sigla  -- fails for 1 record
---     (Boa Esperança do Norte/MT, no microrregiao on file)
---   "regiao-imediata"."regiao-intermediaria".UF.sigla  -- 0 failures,
---     path used below for full coverage
--- The two UF paths never diverge across the 5,570 records where
--- both exist. Choosing between them is a standardization decision —
--- this is why this table lives in marts, not staging.
+-- Source of truth for name/uf, including absolute_gap.
+-- UF path used: "regiao-imediata"."regiao-intermediaria".UF.sigla
+-- (0 failures; alternate microrregiao path fails for Boa Esperança do Norte/MT).
 -- Expected: 5,571 rows.
 ----------------------------------------------------------
 
@@ -122,14 +83,8 @@ FROM project2.staging.municipality_ref_raw;
 
 ----------------------------------------------------------
 -- municipality_area
--- Casts area to DOUBLE and drops the 2 trailing garbage rows (one
--- blank, one an OBS footnote) from the raw file — a filtering
--- decision, which is why this belongs in marts, not staging.
--- Expected: 5,573 rows | all 772 PRODES geocodes match (100% coverage,
--- no duplicates). Note: the IBGE localities API returns 5,571
--- municipalities while this area file has 5,573 — a 2-record
--- divergence between IBGE sources, not investigated further; it does
--- not affect the 772 PRODES municipalities (100% coverage in both).
+-- Drops the 2 trailing garbage rows (blank + OBS footnote) from the raw file.
+-- Expected: 5,573 rows | all 772 PRODES geocodes match (100% coverage).
 ----------------------------------------------------------
 
 CREATE OR REPLACE TABLE project2.marts.municipality_area AS
@@ -140,18 +95,11 @@ FROM project2.staging.municipality_area_raw
 WHERE LENGTH(CD_MUN) = 7;   -- drops the trailing blank/OBS footer rows
 
 ----------------------------------------------------------
--- ipca_annual (the deflator ratio itself lives in 03_analytics.sql)
--- UNPIVOTs the wide month-columns format into long, filters out the
--- Sidra footer/legend rows that null_padding leaked into the month
--- columns (only values shaped like an index pass the regex), casts
--- to DOUBLE, and averages to one row per year. This is filter + type
--- + standardize — the same category of work as ibama_clean/
--- prodes_clean, not a derived index (that's the deflator ratio,
--- analytics-layer).
--- DECISION: 2025 base = average of the year's monthly indices
---           (infraction notices are drafted throughout the year;
---           peak in Sep-Oct) — the averaging itself happens here;
---           analytics.ipca_deflator only divides by it.
+-- ipca_annual
+-- Averages the 12 monthly indices into one value per year, since
+-- infraction notices are drafted throughout the year, not concentrated
+-- in one month (cf. exploring_script.R monthly distribution). Base for
+-- analytics.ipca_deflator.
 -- Expected: 18 rows.
 ----------------------------------------------------------
 
@@ -171,8 +119,6 @@ ORDER BY year;
 
 ----------------------------------------------------------
 -- == MARTS CHECKS ==
--- Single consolidated query, one result grid instead of one tab per
--- check. Run after all five CREATE TABLE blocks above.
 ----------------------------------------------------------
 
 WITH checks AS (
@@ -188,15 +134,12 @@ WITH checks AS (
     UNION ALL SELECT '10_na_geocode_prodes_clean', CAST(SUM(CASE WHEN geocode_ibge IS NULL THEN 1 ELSE 0 END) AS VARCHAR), '0' FROM project2.marts.prodes_clean
     UNION ALL SELECT '11_na_year_prodes_clean', CAST(SUM(CASE WHEN year IS NULL THEN 1 ELSE 0 END) AS VARCHAR), '0' FROM project2.marts.prodes_clean
     UNION ALL SELECT '12_na_area_prodes_clean', CAST(SUM(CASE WHEN area_km2 IS NULL THEN 1 ELSE 0 END) AS VARCHAR), '0' FROM project2.marts.prodes_clean
-    -- n_years_prodes_clean counts 18 DISTINCT years but does not guarantee
-    -- the range, hence the min/max checks alongside it.
+    -- n_years counts DISTINCT years only; min/max below confirm the range.
     UNION ALL SELECT '13_negative_area_prodes_clean', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.marts.prodes_clean WHERE area_km2 < 0
     UNION ALL SELECT '14_min_year_prodes_clean', CAST(MIN(year) AS VARCHAR), '2008' FROM project2.marts.prodes_clean
     UNION ALL SELECT '15_max_year_prodes_clean', CAST(MAX(year) AS VARCHAR), '2025' FROM project2.marts.prodes_clean
-    -- total_area_prodes_clean: a magnitude check on the PRODES side, mirroring
-    -- total_fines_ibama_clean. Without it, a swapped/corrupted CSV with the
-    -- right shape (counts, years, non-negativity OK) would pass every other
-    -- check with wrong areas. Value is the panel's 2008-2025 sum, km2 rounded.
+    -- Magnitude check (mirrors total_fines_ibama_clean): catches a
+    -- wrong-shape-but-valid CSV swap.
     UNION ALL SELECT '16_total_area_prodes_clean', CAST(CAST(ROUND(SUM(area_km2)) AS BIGINT) AS VARCHAR), '140019' FROM project2.marts.prodes_clean
     UNION ALL SELECT '17_n_municipality_ref', CAST(COUNT(*) AS VARCHAR), '5571' FROM project2.marts.municipality_ref
     UNION ALL SELECT '18_duplicate_geocodes_ref', CAST(COUNT(*) AS VARCHAR), '0' FROM (SELECT geocode_ibge FROM project2.marts.municipality_ref GROUP BY geocode_ibge HAVING COUNT(*) > 1) d
@@ -206,32 +149,19 @@ WITH checks AS (
     UNION ALL SELECT '22_n_municipality_area', CAST(COUNT(*) AS VARCHAR), '5573' FROM project2.marts.municipality_area
     UNION ALL SELECT '23_duplicate_area_geocodes', CAST(COUNT(*) AS VARCHAR), '0' FROM (SELECT geocode_ibge FROM project2.marts.municipality_area GROUP BY geocode_ibge HAVING COUNT(*) > 1) d
     UNION ALL SELECT '24_missing_area_prodes_to_area', CAST(COUNT(*) AS VARCHAR), '0' FROM project2.staging.prodes_raw p LEFT JOIN project2.marts.municipality_area a ON p.geocode_ibge = a.geocode_ibge WHERE a.geocode_ibge IS NULL
-    -- missing_legal_amazon_munis: expected 1, not 0 — documented source anomaly,
-    -- same idiom as invalid_geocode_ibama and out_of_scope_geocodes_prodes.
-    -- The one missing is 5101837 Boa Esperança do Norte/MT, split off Nova
-    -- Ubiratã in 2025: too new for the PRODES mesh, already in the IBGE sources.
-    -- Restricted to the 8 states fully inside the Legal Amazon — MA is partial
-    -- (181 of 217), so a UF-level compare there would flag 36 false positives.
-    -- n_geocodes_prodes_clean pins a COUNT and cannot see this; this pins the SET.
-    -- KNOWN CONSEQUENCE (not corrected): PRODES still aggregates the pre-split
-    -- territory into Nova Ubiratã, but marts.municipality_area is IBGE 2025 and
-    -- already splits it — so pct_desmatado for 5106240 divides an old-mesh
-    -- numerator by a new-mesh denominator (8.93% published vs 5.80% on the
-    -- 13,425 km2 pre-split area). Affects that one context value only: the
-    -- ranking is ordered by avg_egs_18y, and the panel's median/p75/max
-    -- pct_desmatado are unchanged. Fires if a future download adds the muni.
+    -- missing_legal_amazon_munis: expected 1, not 0. Boa Esperança do
+    -- Norte/MT (5101837) split from Nova Ubiratã in 2025, too new for the
+    -- PRODES mesh. Consequence for pct_desmatado (5106240): cf. the
+    -- extended report's Nova Ubiratã note.
     UNION ALL SELECT '25_missing_legal_amazon_munis', CAST(COUNT(*) AS VARCHAR), '1'
         FROM project2.marts.municipality_ref r
         LEFT JOIN (SELECT DISTINCT geocode_ibge FROM project2.marts.prodes_clean) p
             ON r.geocode_ibge = p.geocode_ibge
         WHERE r.uf IN ('RO','AC','AM','RR','PA','AP','TO','MT') AND p.geocode_ibge IS NULL
     UNION ALL SELECT '26_n_ipca_annual', CAST(COUNT(*) AS VARCHAR), '18' FROM project2.marts.ipca_annual
-    -- ipca_months_not_12 mirrors a check the R side already runs
-    -- (exploration/exploring_script.R: stopifnot(all(count(ipca_raw, year)$n
-    -- == 12))). A malformed month silently dropped by ignore_errors/the regex
-    -- filter would shrink AVG(avg_index) to 11 months without tripping
-    -- n_ipca_annual (the year would still be present) or invalid_deflator
-    -- (still positive) — a silent, undetected skew.
+    -- Mirrors the 12-month check on the R side (exploring_script.R). A
+    -- dropped month would skew avg_index undetected by n_ipca_annual or
+    -- invalid_deflator.
     UNION ALL SELECT '27_ipca_months_not_12', CAST(COUNT(*) AS VARCHAR), '0' FROM (
         SELECT CAST(regexp_extract(month, '(\d{4})$', 1) AS INTEGER) AS year, COUNT(*) AS n_months
         FROM (UNPIVOT project2.staging.ipca_raw ON COLUMNS('\d{4}$') INTO NAME month VALUE index) long
