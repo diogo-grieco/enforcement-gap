@@ -19,7 +19,7 @@ source("viz/00_setup.R")
 # Two gap counts per year (primary axis) + total deforested area (secondary
 # axis). ggplot secondary axes need a manual rescale onto the primary scale,
 # inverted in sec_axis. Fixed annotations: 2019-2022 capacity shock, and the
-# "2025 not consolidated" band.
+# 2025 band (last panel year, still subject to revision).
 
 rescale_factor <- max(annual$n_absolute_gap, annual$n_measured_gap) /
   max(annual$total_deforested_km2)
