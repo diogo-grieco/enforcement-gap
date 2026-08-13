@@ -5,16 +5,14 @@
 #
 # Author: Diogo Grieco
 #
-# Purpose: The panel-regression findings, in R/fixest to match the thesis
-#          methodology (report figures 12, 13 and 15).
-#            12 coefficient plot summarising the five two-way FE models
-#            13 event study around a deforestation surge (autos & fines,
-#               with placebo pre-period); the honest test of the "hangover":
-#               directional for autos, fragile (CIs cross zero)
-#            15 ridgeline of the EGS distribution by year
-#          Reproduces the Python/linearmodels pilot (ACHADOS_VARREDURA...md)
-#          with municipality + year FE and municipality-clustered SEs: the
-#          exact estimator planned for the dissertation.
+# Purpose: The panel-regression findings, in fixest (report figures 14, 15
+#          and 15).
+#            14 coefficient plot summarising the five two-way FE models
+#            15 event study around a deforestation surge, with placebo
+#               pre-period
+#            17 ridgeline of the EGS distribution by year
+#          Municipality + year FE, municipality-clustered SEs: the estimator
+#          the dissertation proposes, and the one the Python pilot used.
 # =============================================================================
 
 source("viz/00_setup.R")
@@ -24,8 +22,8 @@ library(ggridges)
 # -----------------------------------------------------------------------------
 #### Build the panel with lags/leads WITHIN municipality
 # -----------------------------------------------------------------------------
-# Panel is balanced (772 x 18); still lag/lead within geocode to be safe.
-# log10(1+x) matches the EGS convention and keeps logs defined at zero.
+# The panel is balanced (772 x 18); lag/lead within geocode anyway. log10(1+x)
+# matches the EGS convention and keeps logs defined at zero.
 
 panel <- final %>%
   arrange(geocode_ibge, year) %>%
@@ -34,20 +32,20 @@ panel <- final %>%
          log_infra    = log10(1 + n_infractions),
          log_fine     = log10(1 + fine_values),      # deflated fines
          log_area_l1  = lag(log_area, 1),            # t-1
-         d_log_area   = log_area - log_area_l1,       # year-on-year change
-         log_area_f1  = lead(log_area, 1),            # t+1
-         log_area_f2  = lead(log_area, 2),            # t+2
+         d_log_area   = log_area - log_area_l1,      # year-on-year change
+         log_area_f1  = lead(log_area, 1),           # t+1
+         log_area_f2  = lead(log_area, 2),           # t+2
          log_infra_f1 = lead(log_infra, 1),
          log_infra_f2 = lead(log_infra, 2),
          log_fine_f1  = lead(log_fine, 1),
-         d_pos = pmax(d_log_area, 0),                 # abrupt surge
-         d_neg = pmin(d_log_area, 0)) %>%             # abrupt drop
+         d_pos = pmax(d_log_area, 0),                # abrupt surge
+         d_neg = pmin(d_log_area, 0)) %>%            # abrupt drop
   ungroup()
 
 stopifnot("panel: unexpected row count" = nrow(panel) == N_PANEL)
 
-# Pre-period capacity proxy: mean autos 2008-2016, split at the median.
-# Defined BEFORE the tested window to limit (not remove) endogeneity.
+# Capacity proxy: mean autos 2008-2016, split at the median. Defined BEFORE the
+# tested window to limit, not remove, endogeneity.
 baseline_capacity <- final %>%
   filter(year <= 2016) %>%
   group_by(geocode_ibge) %>%
@@ -61,43 +59,42 @@ panel <- panel %>%
 # -----------------------------------------------------------------------------
 
 m1 <- feols(log_infra ~ log_area + log_area_l1 | geocode_ibge + year,
-            data = panel, cluster = ~geocode_ibge)                       # level
+            data = panel, cluster = ~geocode_ibge)                 # level
 m2 <- feols(log_infra_f1 ~ d_log_area + log_area | geocode_ibge + year,
-            data = panel, cluster = ~geocode_ibge)                       # H2 test
-m3 <- feols(log_infra_f2 ~ d_log_area + log_area + log_area_f2 | geocode_ibge + year,
-            data = panel, cluster = ~geocode_ibge)                       # persistence
-m4 <- feols(log_infra_f1 ~ d_pos + d_neg + log_area + log_area_f1 | geocode_ibge + year,
-            data = panel, cluster = ~geocode_ibge)                       # asymmetry
-m5 <- feols(log_infra_f1 ~ d_pos + d_pos:high_capacity + d_neg + log_area + log_area_f1 |
+            data = panel, cluster = ~geocode_ibge)                 # H2 test
+m3 <- feols(log_infra_f2 ~ d_log_area + log_area + log_area_f2 |
               geocode_ibge + year,
-            data = panel %>% filter(year >= 2017), cluster = ~geocode_ibge)  # capacity
+            data = panel, cluster = ~geocode_ibge)                 # persistence
+m4 <- feols(log_infra_f1 ~ d_pos + d_neg + log_area + log_area_f1 |
+              geocode_ibge + year,
+            data = panel, cluster = ~geocode_ibge)                 # asymmetry
+m5 <- feols(log_infra_f1 ~ d_pos + d_pos:high_capacity + d_neg + log_area +
+              log_area_f1 | geocode_ibge + year,
+            data = panel %>% filter(year >= 2017),
+            cluster = ~geocode_ibge)                               # capacity
 
-# m2f: same specification as m2 with the FINE as the outcome instead of the
-# notice count. The extended report cites its coefficient (-0.399) alongside
-# m2's (-0.057); until the sixth audit this model existed only in the write-up,
-# not in the code: log_fine_f1 was built above and never used, so the published
-# number could not be reproduced from this repository. It is not plotted (item
-# 15 shows the notice-count models only); it exists so the citation is auditable.
+# m2f: m2 with the FINE as the outcome. The report cites its coefficient
+# (-0.399) next to m2's (-0.057); until the sixth audit the model existed only
+# in the write-up, so the published number could not be reproduced from this
+# repository. Not plotted; it exists so the citation is auditable.
 m2f <- feols(log_fine_f1 ~ d_log_area + log_area | geocode_ibge + year,
-             data = panel, cluster = ~geocode_ibge)                      # H2, fines
+             data = panel, cluster = ~geocode_ibge)                # H2, fines
 
 etable(m1, m2, m2f, m3, m4, m5)   # full tables to console for the write-up
 
 # ---------------------------------------------------------------------------
-# Valores PUBLICADOS no relatorio estendido, secao 5.5, na precisao em que o
-# texto os publica. Ate a setima auditoria esta camada nao tinha guarda nenhuma,
-# e por isso um coeficiente do piloto anterior em Python sobreviveu a migracao
-# para o fixest e foi publicado: o modo de falha que a secao 7 do relatorio
-# nomeia ("numeros em prosa derivam; numeros em checks, nao"). A comparacao e
-# por igualdade sobre o valor ARREDONDADO, porque o que se protege e a frase
-# publicada, nao o coeficiente.
+# Values PUBLISHED in the extended report, section 5.5, at the precision the
+# text publishes them. Until the seventh audit this layer had no guard, and a
+# coefficient from the earlier Python pilot survived the migration to fixest
+# and was published. Comparison is by equality on the ROUNDED value, because
+# what is protected is the published sentence, not the coefficient.
 # ---------------------------------------------------------------------------
 PUB_M1_LOG_AREA    <-  0.080 ; PUB_M1_LOG_AREA_L1 <- 0.056
 PUB_M2_D_LOG_AREA  <- -0.057
 PUB_M2F_D_LOG_AREA <- -0.399
-PUB_M3_D_LOG_AREA  <- -0.069   # valor bruto -0.06852515: a 2.5e-5 da fronteira de
-                               # arredondamento. Se ESTE check falhar sozinho, confira
-                               # o valor bruto antes de concluir que o dado mudou.
+PUB_M3_D_LOG_AREA  <- -0.069   # raw -0.06852515, 2.5e-5 from the rounding
+                               # boundary: if THIS check fails alone, read the
+                               # raw value before concluding the data moved.
 PUB_M4_D_POS       <- -0.114 ; PUB_M4_D_POS_SE    <- 0.032
 PUB_M4_D_NEG       <- -0.005
 PUB_M5_D_POS_HICAP <- -0.121
@@ -108,22 +105,31 @@ PUB_N_OBS <- c(m1 = 13124, m2 = 12352, m2f = 12352, m3 = 11580,
 .se <- function(m, term) unname(summary(m)$coeftable[term, "Std. Error"])
 
 stopifnot(
-  "m1: log_area publicado mudou"     = round(.cf(m1, "log_area"),    3) == PUB_M1_LOG_AREA,
-  "m1: log_area_l1 publicado mudou"  = round(.cf(m1, "log_area_l1"), 3) == PUB_M1_LOG_AREA_L1,
-  "m2: d_log_area publicado mudou"   = round(.cf(m2, "d_log_area"),  3) == PUB_M2_D_LOG_AREA,
-  "m2f: d_log_area publicado mudou"  = round(.cf(m2f,"d_log_area"),  3) == PUB_M2F_D_LOG_AREA,
-  "m3: d_log_area publicado mudou"   = round(.cf(m3, "d_log_area"),  3) == PUB_M3_D_LOG_AREA,
-  "m4: d_pos publicado mudou"        = round(.cf(m4, "d_pos"),       3) == PUB_M4_D_POS,
-  "m4: EP de d_pos publicado mudou"  = round(.se(m4, "d_pos"),       3) == PUB_M4_D_POS_SE,
-  "m4: d_neg publicado mudou"        = round(.cf(m4, "d_neg"),       3) == PUB_M4_D_NEG,
-  "m5: interacao publicada mudou"    = round(.cf(m5, "d_pos:high_capacity"), 3) == PUB_M5_D_POS_HICAP,
-  "observacoes de m1-m5 mudaram"     =
+  "m1: published log_area changed"    = round(.cf(m1, "log_area"), 3) ==
+    PUB_M1_LOG_AREA,
+  "m1: published log_area_l1 changed" = round(.cf(m1, "log_area_l1"), 3) ==
+    PUB_M1_LOG_AREA_L1,
+  "m2: published d_log_area changed"  = round(.cf(m2, "d_log_area"), 3) ==
+    PUB_M2_D_LOG_AREA,
+  "m2f: published d_log_area changed" = round(.cf(m2f, "d_log_area"), 3) ==
+    PUB_M2F_D_LOG_AREA,
+  "m3: published d_log_area changed"  = round(.cf(m3, "d_log_area"), 3) ==
+    PUB_M3_D_LOG_AREA,
+  "m4: published d_pos changed"       = round(.cf(m4, "d_pos"), 3) ==
+    PUB_M4_D_POS,
+  "m4: published SE of d_pos changed" = round(.se(m4, "d_pos"), 3) ==
+    PUB_M4_D_POS_SE,
+  "m4: published d_neg changed"       = round(.cf(m4, "d_neg"), 3) ==
+    PUB_M4_D_NEG,
+  "m5: published interaction changed" =
+    round(.cf(m5, "d_pos:high_capacity"), 3) == PUB_M5_D_POS_HICAP,
+  "m1-m5 observation counts changed"  =
     all(vapply(list(m1, m2, m2f, m3, m4, m5), nobs, numeric(1)) ==
-        PUB_N_OBS[c("m1","m2","m2f","m3","m4","m5")])
+          PUB_N_OBS[c("m1","m2","m2f","m3","m4","m5")])
 )
 
 # -----------------------------------------------------------------------------
-#### 12: coefficient plot
+#### 14: coefficient plot
 # -----------------------------------------------------------------------------
 
 grab <- function(model, term, label) {
@@ -139,56 +145,54 @@ coef_df <- bind_rows(
   grab(m3, "d_log_area",         "Mudança abrupta(t) \u2192 autos(t+2)"),
   grab(m4, "d_pos",              "Surto(t) \u2192 autos(t+1)"),
   grab(m4, "d_neg",              "Queda(t) \u2192 autos(t+1)"),
-  grab(m5, "d_pos:high_capacity","Surto \u00d7 alta capacidade \u2192 autos(t+1)")
+  grab(m5, "d_pos:high_capacity",
+       "Surto \u00d7 alta capacidade \u2192 autos(t+1)")
 ) %>%
   mutate(lo = estimate - 1.96 * se, hi = estimate + 1.96 * se,
          label = factor(label, levels = rev(label)))
 
 p_coef <- ggplot(coef_df, aes(x = estimate, y = label)) +
   geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
-  geom_pointrange(aes(xmin = lo, xmax = hi, colour = estimate < 0), size = 0.5) +
-  scale_colour_manual(values = c("TRUE" = "#a63d2f", "FALSE" = "#2e6e54"), guide = "none") +
+  geom_pointrange(aes(xmin = lo, xmax = hi, colour = estimate < 0),
+                  size = 0.5) +
+  scale_colour_manual(values = c("TRUE" = "#a63d2f", "FALSE" = "#2e6e54"),
+                      guide = "none") +
   scale_x_continuous(labels = number) +
   labs(x = "Coeficiente (IC 95%)", y = NULL) +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 13: event study around a deforestation surge (the honest version)
+#### 15: event study around a deforestation surge
 # -----------------------------------------------------------------------------
-# A raw 3-municipality time series CANNOT show the "hangover": it is a partial,
-# average effect (net of the deforestation level), not a raw-series phenomenon
-# in any single unit. The correct object is an event study: leads and lags of
-# the surge magnitude (d_pos), controlling the contemporaneous deforestation
-# level, with municipality + year FE. This is also the estimator the thesis
-# proposes (sec. 8.7).
+# A raw time series of a few municipalities cannot show the "hangover": it is a
+# partial, average effect net of the deforestation level, not a phenomenon
+# visible in any single unit. The object is an event study: leads and lags of
+# the surge magnitude (d_pos), controlling the contemporaneous level, with
+# municipality + year FE.
 #
-# Reading: the single-lag result in the coefficient plot above is the
-# strongest cut. Distributed across event time it WEAKENS: for autos the
-# path is directionally consistent (flat placebos, negative at 0/+1/+2) but
-# not individually significant; for fines it does not hold. Both outcomes
-# are plotted with 95% CIs so the fragility is visible, not hidden. Placebos
-# (event time -2, -1) check for pre-trends.
+# Reading: the single-lag result in figure 14 is the strongest cut. Distributed
+# across event time it WEAKENS: for autos the path is directionally consistent
+# (flat placebos, negative at 0/+1/+2) but not individually significant; for
+# fines it does not hold. Both are plotted with 95% CIs so the fragility is
+# visible. Placebos at -2 and -1 check for pre-trends.
 
-# Leads/lags of the surge magnitude, within municipality.
 es_panel <- panel %>%
   arrange(geocode_ibge, year) %>%
   group_by(geocode_ibge) %>%
-  mutate(dpos_lead2 = lead(d_pos, 2),   # surge 2y ahead  -> event time -2 (placebo)
+  mutate(dpos_lead2 = lead(d_pos, 2),   # event time -2 (placebo)
          dpos_lead1 = lead(d_pos, 1),   # event time -1 (placebo)
          dpos_lag0  = d_pos,            # event time  0 (surge year)
          dpos_lag1  = lag(d_pos, 1),    # event time +1
-         dpos_lag2  = lag(d_pos, 2)) %>%# event time +2
+         dpos_lag2  = lag(d_pos, 2)) %>%
   ungroup()
 
-# Distributed-lag models for each outcome, controlling contemporaneous level.
-es_autos <- feols(log_infra ~ dpos_lead2 + dpos_lead1 + dpos_lag0 + dpos_lag1 +
-                    dpos_lag2 + log_area | geocode_ibge + year,
+es_autos <- feols(log_infra ~ dpos_lead2 + dpos_lead1 + dpos_lag0 +
+                    dpos_lag1 + dpos_lag2 + log_area | geocode_ibge + year,
                   data = es_panel, cluster = ~geocode_ibge)
-es_fine  <- feols(log_fine  ~ dpos_lead2 + dpos_lead1 + dpos_lag0 + dpos_lag1 +
-                    dpos_lag2 + log_area | geocode_ibge + year,
+es_fine  <- feols(log_fine ~ dpos_lead2 + dpos_lead1 + dpos_lag0 +
+                    dpos_lag1 + dpos_lag2 + log_area | geocode_ibge + year,
                   data = es_panel, cluster = ~geocode_ibge)
 
-# Extract the event-time path (coefficient + 95% CI) from a fitted model.
 EVENT_MAP <- c(dpos_lead2 = -2, dpos_lead1 = -1, dpos_lag0 = 0,
                dpos_lag1 = 1, dpos_lag2 = 2)
 event_path <- function(model, outcome) {
@@ -198,18 +202,20 @@ event_path <- function(model, outcome) {
              estimate = ct[, "Estimate"],
              se       = ct[, "Std. Error"], row.names = NULL)
 }
-# Valores PUBLICADOS na Tabela 4 do relatorio estendido. Esta e a guarda que
-# teria pego o erro: seis dos dez coeficientes publicados nao saiam deste modelo.
-PUB_ES_TERMS  <- c("dpos_lead2","dpos_lead1","dpos_lag0","dpos_lag1","dpos_lag2")
+
+# Table 4 of the extended report. This is the guard that would have caught the
+# error: six of the ten published coefficients did not come from this model.
+PUB_ES_TERMS  <- c("dpos_lead2", "dpos_lead1", "dpos_lag0",
+                   "dpos_lag1", "dpos_lag2")
 PUB_ES_AUTOS  <- c( 0.036, -0.001, -0.063, -0.034, -0.015)
 PUB_ES_MULTAS <- c( 0.196,  0.071, -0.212,  0.000,  0.144)
 
 stopifnot(
-  "event study (autos): a Tabela 4 nao sai deste modelo" =
+  "event study (autos): Table 4 does not come from this model" =
     all(round(unname(coef(es_autos)[PUB_ES_TERMS]), 3) == PUB_ES_AUTOS),
-  "event study (multas): a Tabela 4 nao sai deste modelo" =
-    all(round(unname(coef(es_fine)[PUB_ES_TERMS]),  3) == PUB_ES_MULTAS),
-  "event study: observacoes mudaram" = nobs(es_autos) == PUB_N_OBS[["es"]]
+  "event study (fines): Table 4 does not come from this model" =
+    all(round(unname(coef(es_fine)[PUB_ES_TERMS]), 3) == PUB_ES_MULTAS),
+  "event study: observation count changed" = nobs(es_autos) == PUB_N_OBS[["es"]]
 )
 
 es_df <- bind_rows(event_path(es_autos, "autos"),
@@ -219,27 +225,32 @@ es_df <- bind_rows(event_path(es_autos, "autos"),
 p_event <- ggplot(es_df, aes(x = event_time, y = estimate, colour = outcome)) +
   geom_hline(yintercept = 0, colour = "grey60") +
   geom_vline(xintercept = 0, linetype = "dashed", colour = "grey75") +
-  geom_pointrange(aes(ymin = lo, ymax = hi), position = position_dodge(width = 0.25)) +
+  geom_pointrange(aes(ymin = lo, ymax = hi),
+                  position = position_dodge(width = 0.25)) +
   geom_line(position = position_dodge(width = 0.25), alpha = 0.4) +
   scale_x_continuous(breaks = -2:2,
-                     labels = c("-2\n(placebo)","-1\n(placebo)","0\n(surto)","+1","+2")) +
-  scale_colour_manual(values = c("autos" = "#2e6e54", "multas (deflacionadas)" = "#a63d2f"),
+                     labels = c("-2\n(placebo)", "-1\n(placebo)",
+                                "0\n(surto)", "+1", "+2")) +
+  scale_colour_manual(values = c("autos" = "#2e6e54",
+                                 "multas (deflacionadas)" = "#a63d2f"),
                       name = "Variável") +
   scale_y_continuous(labels = number) +
-  labs(x = "Tempo do evento (anos em relação ao surto)", y = "Coeficiente (IC 95%)") +
+  labs(x = "Tempo do evento (anos em relação ao surto)",
+       y = "Coeficiente (IC 95%)") +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 15: ridgeline of EGS distribution by year
+#### 17: ridgeline of the EGS distribution by year
 # -----------------------------------------------------------------------------
-# Whole distribution shifting over 2008-2025, not just the mean. EGS is
-# ordinal; a ridgeline reads shape/spread (legitimate), whereas comparing
-# mean gaps in raw units would not be.
+# EGS is ordinal: a ridgeline reads shape and spread, which is legitimate,
+# whereas comparing mean gaps in raw units would not be.
 
 p_ridge <- ggplot(final %>% filter(egs > 0),   # drop the no-pressure zero mass
                   aes(x = egs, y = factor(year), fill = after_stat(x))) +
-  geom_density_ridges_gradient(scale = 2.2, rel_min_height = 0.01, colour = "white") +
-  scale_fill_gradientn(colours = QUINTILE_PALETTE, name = "EGS", labels = number) +
+  geom_density_ridges_gradient(scale = 2.2, rel_min_height = 0.01,
+                               colour = "white") +
+  scale_fill_gradientn(colours = EGS_RAMP, name = "EGS",
+                       labels = number) +
   scale_x_continuous(labels = number) +
   labs(x = "EGS (anual, > 0)", y = NULL) +
   theme_chart
@@ -248,6 +259,9 @@ p_ridge <- ggplot(final %>% filter(egs > 0),   # drop the no-pressure zero mass
 #### Save
 # -----------------------------------------------------------------------------
 
-ggsave(file.path(PATH_OUT, "12_coefficient_plot.png"), p_coef,     width = 8, height = 5, dpi = 150)
-ggsave(file.path(PATH_OUT, "13_event_study.png"),      p_event,    width = 8, height = 5, dpi = 150)
-ggsave(file.path(PATH_OUT, "15_egs_ridgeline.png"),    p_ridge,    width = 7, height = 7, dpi = 150)
+ggsave(file.path(PATH_OUT, "14_coefficient_plot.png"), p_coef,
+       width = 8, height = 5, dpi = 150)
+ggsave(file.path(PATH_OUT, "15_event_study.png"), p_event,
+       width = 8, height = 5, dpi = 150)
+ggsave(file.path(PATH_OUT, "17_egs_ridgeline.png"), p_ridge,
+       width = 7, height = 7, dpi = 150)

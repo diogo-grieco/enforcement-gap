@@ -1,20 +1,19 @@
 # Suíte de visualização (R)
 
-Gera as 16 figuras dos relatórios em `deliverables/`, a partir dos parquets do pipeline. Cada script começa com `source("viz/00_setup.R")`, que declara caminhos, constantes de integridade, paleta e tema, e carrega os dados com `stopifnot()`, no mesmo estilo de `exploration/exploring_script.R`.
+Gera as 18 figuras dos relatórios em `deliverables/`, a partir dos parquets do pipeline. Cada script começa com `source("viz/00_setup.R")`, que declara caminhos, constantes de integridade, paleta e tema, e carrega os dados com `stopifnot()`, no mesmo estilo de `exploration/exploring_script.R`.
 
 Rode sempre a partir da raiz do projeto (abrir `project2.Rproj`).
 
 ---
 
-## Os três arquivos `00_`
+## Os dois arquivos que rodam antes
 
 Não são intercambiáveis: cada um cobre um tipo diferente de "roda antes dos numerados".
 
 | Arquivo | Carregado por | Quando |
 |---|---|---|
 | `00_setup.R` | todos os scripts `01` a `06` | sempre; leitura barata dos parquets e da malha, paleta, tema |
-| `00_load_ibama_clean.R` | só `04` e `06` | só pelos dois scripts que precisam dos autos brutos do IBAMA; não é carregado pelo `00_setup.R`, para que os outros quatro não paguem a leitura dos 18 CSVs |
-| `00_build_mesh.R` | nenhum | rodar isolado, uma vez, só se o conjunto de municípios do painel mudar |
+| `prep_mesh.R` | nenhum | rodar isolado, uma vez, só se o conjunto de municípios do painel mudar |
 
 ---
 
@@ -37,7 +36,7 @@ Todos declarados como constantes `PATH_*` / `FILE_*` no topo de `00_setup.R`. Se
 ```r
 install.packages(c(
   "tidyverse","sf","arrow","scales",          # 00_setup
-  "geobr","rmapshaper",                        # 00_build_mesh (baixa e simplifica)
+  "geobr","rmapshaper",                        # prep_mesh (baixa e simplifica)
   "ggrepel","ineq","readr",                    # painéis + IBAMA bruto
   "fixest","ggridges",                          # efeitos de painel
   "igraph","ggraph"                             # rede de infratores
@@ -48,21 +47,21 @@ install.packages(c(
 
 ## Ordem de execução
 
-Cada script de `01` a `06` é independente: rode qualquer um sozinho, em qualquer ordem, e ele produz suas próprias figuras corretamente. O único pré-requisito real é `00_build_mesh.R`, e só uma vez.
+Cada script de `01` a `06` é independente: rode qualquer um sozinho, em qualquer ordem, e ele produz suas próprias figuras corretamente. Um clone já traz a malha simplificada versionada, então `prep_mesh.R` não precisa ser rodado; ele só é necessário se o conjunto de municípios do painel mudar.
 
 `04_raw_ibama.R` e `06_offender_network.R` chamam `load_ibama_clean()`, que lê o cache dos autos brutos se ele existir e o constrói se não existir. Rodar o `04` antes do `06` só poupa o `06` de refazer a leitura dos 18 CSVs; não é obrigatório.
 
 | Script | Figuras do relatório | Produz |
 |---|---|---|
-| `00_build_mesh.R` | (nenhuma) | malha municipal em `data/data_ibge/`, uma vez |
-| `01_maps.R` | 1 a 3 | coropléticos (desmatamento absoluto, EGS) e mapa bivariado |
-| `02_ranking_panels.R` | 5, 6, 16 | dispersão log-log, quadrante histórico × recente, séries dos casos-âncora |
-| `03_annual_and_audit.R` | 4 | série anual (lacuna por tipo + área desmatada) |
-| `04_raw_ibama.R` | 7 a 11 | curva de Lorenz, cancelamento por ano e por UF, defasagem fato→autuação, mix de instrumentos; **armazena em cache** a leitura do IBAMA bruto |
-| `05_panel_effects.R` | 12, 13, 15 | gráfico de coeficientes (fixest), event study em torno de um surto, cristas do EGS |
-| `06_offender_network.R` | 14 | rede de infratores multi-município |
+| `prep_mesh.R` | (nenhuma) | malha municipal em `data/data_ibge/`, uma vez |
+| `01_maps.R` | 1 a 5 | coropléticos que constroem o índice: desmatamento absoluto, % desmatado, multas, EGS, direção do EGS |
+| `02_ranking_panels.R` | 7, 8, 18 | dispersão log-log, quadrante histórico × recente, séries dos casos-âncora |
+| `03_annual_and_audit.R` | 6 | série anual (lacuna por tipo + área desmatada) |
+| `04_raw_ibama.R` | 9 a 13 | curva de Lorenz, cancelamento por ano e por UF, defasagem fato→autuação, mix de instrumentos; **armazena em cache** a leitura do IBAMA bruto |
+| `05_panel_effects.R` | 14, 15, 17 | gráfico de coeficientes (fixest), event study em torno de um surto, cristas do EGS |
+| `06_offender_network.R` | 16 | rede de infratores multi-município |
 
-A numeração dos arquivos PNG acompanha a do relatório estendido: `Figura N` no texto corresponde a `N_*.png` em `output/visualizations/`.
+A numeração dos arquivos PNG acompanha a do relatório estendido: `Figura N` no texto corresponde a `N_*.png` em `output/visualizations/`. As figuras 1 a 5 são uma série numa ordem deliberada: numerador bruto, numerador normalizado, denominador, a razão, a direção da razão. Todas em quintil de rank sobre os mesmos 552 municípios, então um quintil significa uma coisa só na série inteira.
 
 ---
 

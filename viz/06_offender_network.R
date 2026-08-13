@@ -1,27 +1,24 @@
 # =============================================================================
 # ENFORCEMENT GAP MONITORING SYSTEM
-# Visualization Suite: 07 offender network
+# Visualization Suite: 06 offender network
 # IBAMA raw data (cached)
 #
 # Author: Diogo Grieco
 #
-# Purpose: Multi-municipality offender network (item 18). Bipartite graph of
-#          offenders (CPF/CNPJ) fined for deforestation in 3+ distinct
+# Purpose: Multi-municipality offender network (report figure 16). Bipartite
+#          graph of offenders fined for deforestation in 3+ distinct
 #          municipalities, linked to those municipalities: the territorial
-#          reach of repeat offenders, invisible in the official municipality
-#          aggregates. Self-contained: reads the same raw IBAMA cache as
-#          04_raw_ibama.R via load_ibama_clean() (00_load_ibama_clean.R),
-#          which builds the cache itself if it doesn't exist yet; running
-#          04 first is faster (skips the 18-CSV read) but not required.
+#          reach of repeat offenders, invisible in the municipality
+#          aggregates. Calls load_ibama_clean() (00_setup.R), which builds the
+#          cache if missing; running 04 first only saves the 18-CSV read.
 # =============================================================================
 
 source("viz/00_setup.R")
-source("viz/00_load_ibama_clean.R")
 library(igraph)
 library(ggraph)
 
 # -----------------------------------------------------------------------------
-#### Load + filter raw IBAMA (shared loader); network needs a valid offender id
+#### Load + filter raw IBAMA; the network needs a valid offender id
 # -----------------------------------------------------------------------------
 
 clean <- load_ibama_clean()$clean %>%
@@ -30,6 +27,9 @@ clean <- load_ibama_clean()$clean %>%
 # -----------------------------------------------------------------------------
 #### Offenders active in 3+ municipalities
 # -----------------------------------------------------------------------------
+# The 3-municipality cut is a reading choice, not a tested threshold: pinning
+# the size of the graph is what keeps the figure from changing content
+# unnoticed.
 
 MIN_MUNIS <- 3
 offender_reach <- clean %>%
@@ -37,7 +37,17 @@ offender_reach <- clean %>%
   count(CPF_CNPJ_INFRATOR, name = "n_munis") %>%
   filter(n_munis >= MIN_MUNIS)
 
-# Edges: offender -- municipality; offenders anonymised (never show raw CPF/CNPJ).
+PUB_N_OFFENDERS_3PLUS <- 117
+PUB_MAX_REACH         <- 6
+
+stopifnot(
+  "network: count of 3+ municipality offenders changed" =
+    nrow(offender_reach) == PUB_N_OFFENDERS_3PLUS,
+  "network: maximum offender reach changed" =
+    max(offender_reach$n_munis) == PUB_MAX_REACH
+)
+
+# Edges: offender to municipality, offenders relabelled (never show the id).
 edges <- clean %>%
   filter(CPF_CNPJ_INFRATOR %in% offender_reach$CPF_CNPJ_INFRATOR) %>%
   distinct(CPF_CNPJ_INFRATOR, COD_MUNICIPIO) %>%
@@ -57,9 +67,13 @@ set.seed(1)   # reproducible layout
 p_net <- ggraph(g, layout = "fr") +
   geom_edge_link(alpha = 0.25, colour = "grey55") +
   geom_node_point(aes(colour = type, size = type)) +
-  scale_colour_manual(values = c(offender = "#a63d2f", municipality = "#2e6e54"),
-                      labels = c(offender = "infrator", municipality = "município"), name = NULL) +
-  scale_size_manual(values = c(offender = 3, municipality = 1.8), guide = "none") +
+  scale_colour_manual(
+    values = c(offender = "#a63d2f", municipality = "#2e6e54"),
+    labels = c(offender = "infrator", municipality = "município"),
+    name = NULL) +
+  scale_size_manual(values = c(offender = 3, municipality = 1.8),
+                    guide = "none") +
   theme_void(base_size = 12)
 
-ggsave(file.path(PATH_OUT, "14_offender_network.png"), p_net, width = 9, height = 7, dpi = 150)
+ggsave(file.path(PATH_OUT, "16_offender_network.png"), p_net,
+       width = 9, height = 7, dpi = 150)

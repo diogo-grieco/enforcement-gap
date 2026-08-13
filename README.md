@@ -29,7 +29,7 @@ project2/
 ├── exploration/                (validação paralela em R, roda direto sobre os CSVs brutos)
 │   └── exploring_script.R
 ├── viz/                         (suíte de visualização; ver viz/README.md)
-│   ├── 00_setup.R, 00_build_mesh.R, 01_maps.R … 06_offender_network.R
+│   ├── 00_setup.R, prep_mesh.R, 01_maps.R … 06_offender_network.R
 │   └── README.md
 ├── deliverables/
 │   ├── EGMS_01_resumo_executivo.docx
@@ -44,7 +44,7 @@ project2/
 │   ├── data_ibge/
 │   │   ├── municipios.json
 │   │   ├── municipality_area_2025.csv
-│   │   └── malha_772_amazonia_legal_simplificada.geojson   (gerado por viz/00_build_mesh.R)
+│   │   └── malha_772_amazonia_legal_simplificada.geojson   (gerado por viz/prep_mesh.R)
 │   └── data_ipca/
 │       └── sidra_1737_v2266_ipca_indice_200801_202512_2026_07_10.csv
 └── output/
