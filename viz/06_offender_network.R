@@ -5,7 +5,7 @@
 #
 # Author: Diogo Grieco
 #
-# Purpose: Multi-municipality offender network (report figure 16). Bipartite
+# Purpose: Multi-municipality offender network (report figure 13). Bipartite
 #          graph of offenders fined for deforestation in 3+ distinct
 #          municipalities, linked to those municipalities: the territorial
 #          reach of repeat offenders, invisible in the municipality
@@ -75,5 +75,5 @@ p_net <- ggraph(g, layout = "fr") +
                     guide = "none") +
   theme_void(base_size = 12)
 
-ggsave(file.path(PATH_OUT, "16_offender_network.png"), p_net,
+ggsave(file.path(PATH_OUT, "13_offender_network.png"), p_net,
        width = 9, height = 7, dpi = 150)

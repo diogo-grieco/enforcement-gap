@@ -6,10 +6,10 @@
 # Author: Diogo Grieco
 #
 # Purpose: Non-spatial panels on the municipality-grain ranking (report
-#          figures 7, 8 and 18).
+#          figures 7, 8 and 14).
 #            7   log-log scatter (deforestation x fines): the EGS formula drawn
 #            8   historical x recent quadrant (avg_egs_18y vs avg_egs_3y)
-#            18  small multiples: annual EGS of the 5 anchor cases
+#            14  small multiples: annual EGS of the 5 anchor cases
 # =============================================================================
 
 source("viz/00_setup.R")
@@ -118,7 +118,7 @@ p_quadrant <- ggplot(ranking, aes(x = avg_egs_18y, y = avg_egs_3y)) +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 18: small multiples, annual EGS of the 5 anchor cases
+#### 14: small multiples, annual EGS of the 5 anchor cases
 # -----------------------------------------------------------------------------
 
 anchor_series <- final %>%
@@ -145,5 +145,5 @@ ggsave(file.path(PATH_OUT, "07_loglog_scatter.png"), p_scatter,
        width = 8, height = 6, dpi = 150)
 ggsave(file.path(PATH_OUT, "08_quadrant.png"), p_quadrant,
        width = 8, height = 6, dpi = 150)
-ggsave(file.path(PATH_OUT, "18_anchor_small_multiples.png"), p_anchors,
+ggsave(file.path(PATH_OUT, "14_anchor_small_multiples.png"), p_anchors,
        width = 7.5, height = 4.6, dpi = 150)

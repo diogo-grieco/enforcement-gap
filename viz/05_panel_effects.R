@@ -5,19 +5,17 @@
 #
 # Author: Diogo Grieco
 #
-# Purpose: The panel-regression findings, in fixest (report figures 14, 15
-#          and 15).
-#            14 coefficient plot summarising the five two-way FE models
-#            15 event study around a deforestation surge, with placebo
+# Purpose: The panel-regression findings, in fixest (report figures 11
+#          and 12).
+#            11 coefficient plot summarising the five two-way FE models
+#            12 event study around a deforestation surge, with placebo
 #               pre-period
-#            17 ridgeline of the EGS distribution by year
 #          Municipality + year FE, municipality-clustered SEs: the estimator
 #          the dissertation proposes, and the one the Python pilot used.
 # =============================================================================
 
 source("viz/00_setup.R")
 library(fixest)
-library(ggridges)
 
 # -----------------------------------------------------------------------------
 #### Build the panel with lags/leads WITHIN municipality
@@ -129,7 +127,7 @@ stopifnot(
 )
 
 # -----------------------------------------------------------------------------
-#### 14: coefficient plot
+#### 11: coefficient plot
 # -----------------------------------------------------------------------------
 
 grab <- function(model, term, label) {
@@ -162,7 +160,7 @@ p_coef <- ggplot(coef_df, aes(x = estimate, y = label)) +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 15: event study around a deforestation surge
+#### 12: event study around a deforestation surge
 # -----------------------------------------------------------------------------
 # A raw time series of a few municipalities cannot show the "hangover": it is a
 # partial, average effect net of the deforestation level, not a phenomenon
@@ -170,7 +168,7 @@ p_coef <- ggplot(coef_df, aes(x = estimate, y = label)) +
 # the surge magnitude (d_pos), controlling the contemporaneous level, with
 # municipality + year FE.
 #
-# Reading: the single-lag result in figure 14 is the strongest cut. Distributed
+# Reading: the single-lag result in figure 11 is the strongest cut. Distributed
 # across event time it WEAKENS: for autos the path is directionally consistent
 # (flat placebos, negative at 0/+1/+2) but not individually significant; for
 # fines it does not hold. Both are plotted with 95% CIs so the fragility is
@@ -240,28 +238,10 @@ p_event <- ggplot(es_df, aes(x = event_time, y = estimate, colour = outcome)) +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 17: ridgeline of the EGS distribution by year
-# -----------------------------------------------------------------------------
-# EGS is ordinal: a ridgeline reads shape and spread, which is legitimate,
-# whereas comparing mean gaps in raw units would not be.
-
-p_ridge <- ggplot(final %>% filter(egs > 0),   # drop the no-pressure zero mass
-                  aes(x = egs, y = factor(year), fill = after_stat(x))) +
-  geom_density_ridges_gradient(scale = 2.2, rel_min_height = 0.01,
-                               colour = "white") +
-  scale_fill_gradientn(colours = EGS_RAMP, name = "EGS",
-                       labels = number) +
-  scale_x_continuous(labels = number) +
-  labs(x = "EGS (anual, > 0)", y = NULL) +
-  theme_chart
-
-# -----------------------------------------------------------------------------
 #### Save
 # -----------------------------------------------------------------------------
 
-ggsave(file.path(PATH_OUT, "14_coefficient_plot.png"), p_coef,
+ggsave(file.path(PATH_OUT, "11_coefficient_plot.png"), p_coef,
        width = 8, height = 5, dpi = 150)
-ggsave(file.path(PATH_OUT, "15_event_study.png"), p_event,
+ggsave(file.path(PATH_OUT, "12_event_study.png"), p_event,
        width = 8, height = 5, dpi = 150)
-ggsave(file.path(PATH_OUT, "17_egs_ridgeline.png"), p_ridge,
-       width = 7, height = 7, dpi = 150)

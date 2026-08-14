@@ -1,6 +1,6 @@
 # Suíte de visualização (R)
 
-Gera as 18 figuras dos relatórios em `deliverables/`, a partir dos parquets do pipeline. Cada script começa com `source("viz/00_setup.R")`, que declara caminhos, constantes de integridade, paleta e tema, e carrega os dados com `stopifnot()`, no mesmo estilo de `exploration/exploring_script.R`.
+Gera as 14 figuras dos relatórios em `deliverables/`, a partir dos parquets do pipeline. Cada script começa com `source("viz/00_setup.R")`, que declara caminhos, constantes de integridade, paleta e tema, e carrega os dados com `stopifnot()`, no mesmo estilo de `exploration/exploring_script.R`.
 
 Rode sempre a partir da raiz do projeto (abrir `project2.Rproj`).
 
@@ -38,7 +38,7 @@ install.packages(c(
   "tidyverse","sf","arrow","scales",          # 00_setup
   "geobr","rmapshaper",                        # prep_mesh (baixa e simplifica)
   "ggrepel","ineq","readr",                    # painéis + IBAMA bruto
-  "fixest","ggridges",                          # efeitos de painel
+  "fixest",                                     # efeitos de painel
   "igraph","ggraph"                             # rede de infratores
 ))
 ```
@@ -55,11 +55,11 @@ Cada script de `01` a `06` é independente: rode qualquer um sozinho, em qualque
 |---|---|---|
 | `prep_mesh.R` | (nenhuma) | malha municipal em `data/data_ibge/`, uma vez |
 | `01_maps.R` | 1 a 5 | coropléticos que constroem o índice: desmatamento absoluto, % desmatado, multas, EGS, direção do EGS |
-| `02_ranking_panels.R` | 7, 8, 18 | dispersão log-log, quadrante histórico × recente, séries dos casos-âncora |
+| `02_ranking_panels.R` | 7, 8, 14 | dispersão log-log, quadrante histórico × recente, séries dos casos-âncora |
 | `03_annual_and_audit.R` | 6 | série anual (lacuna por tipo + área desmatada) |
-| `04_raw_ibama.R` | 9 a 13 | curva de Lorenz, cancelamento por ano e por UF, defasagem fato→autuação, mix de instrumentos; **armazena em cache** a leitura do IBAMA bruto |
-| `05_panel_effects.R` | 14, 15, 17 | gráfico de coeficientes (fixest), event study em torno de um surto, cristas do EGS |
-| `06_offender_network.R` | 16 | rede de infratores multi-município |
+| `04_raw_ibama.R` | 9 e 10 | curva de Lorenz e cancelamento por ano; **armazena em cache** a leitura do IBAMA bruto |
+| `05_panel_effects.R` | 11 e 12 | gráfico de coeficientes (fixest) e event study em torno de um surto |
+| `06_offender_network.R` | 13 | rede de infratores multi-município |
 
 A numeração dos arquivos PNG acompanha a do relatório estendido: `Figura N` no texto corresponde a `N_*.png` em `output/visualizations/`. As figuras 1 a 5 são uma série numa ordem deliberada: numerador bruto, numerador normalizado, denominador, a razão, a direção da razão. Todas em quintil de rank sobre os mesmos 552 municípios, então um quintil significa uma coisa só na série inteira.
 
