@@ -3,12 +3,12 @@
 .RData
 .Ruserdata
 
-# banco DuckDB local, binário do CLI, write-ahead log — grandes, regeneráveis
+# banco DuckDB local, binário do CLI, write-ahead log: grandes, regeneráveis
 project2.duckdb
 duckdb.exe
 *.wal
 
-# dado bruto do IBAMA com nome/CPF/CNPJ do autuado — nunca publicizado
+# dado bruto do IBAMA com nome/CPF/CNPJ do autuado: nunca publicizado
 # (a versão sem PII, data/data_ibama_public/, É versionada)
 data/data_ibama/
 
@@ -17,11 +17,8 @@ data/data_ibama/
 # simplificada); regenerada localmente ao rodar o script
 data/data_ibge/malha_772_amazonia_legal.geojson
 
-# caches intermediários da suíte viz/ — regenerados no primeiro run local
-output/parquets/viz_*.parquet
-
-# material interno do processo de pesquisa — não faz parte do repositório público
+# material interno do processo de pesquisa: não faz parte do repositório público
 references/
 
-# registro de mudanças — documentação interna de desenvolvimento
+# registro de mudanças: documentação interna de desenvolvimento
 CHANGELOG.md

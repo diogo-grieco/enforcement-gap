@@ -4,64 +4,64 @@
 #
 # Author: Diogo Grieco
 #
-# Purpose: National annual series (report figure 6): gap counts by type plus
-#          total deforested area.
+# Purpose: National annual series (report figure 6): the annual situation of
+#          the 772 municipalities plus total deforested area.
 # =============================================================================
 
 source("viz/00_setup.R")
 
 # -----------------------------------------------------------------------------
-#### 4: national annual series
+#### 6: national annual series
 # -----------------------------------------------------------------------------
-# Two gap counts per year (primary axis) plus total deforested area (secondary
-# axis; ggplot needs the manual rescale onto the primary scale, inverted in
-# sec_axis). Two fixed annotations: the 2019-2022 capacity shock and the 2025
-# band (last panel year, still subject to revision).
-#
-# Guard: what the series shows of the shock is the INVERSION, the years when
-# absolute gap overtakes measured gap, not the counts themselves.
 
 PUB_SHOCK_INVERSION <- c(2020, 2021, 2022)
 
 stopifnot(
   "annual series: the capacity-shock inversion changed" =
     setequal(annual$year[annual$n_absolute_gap > annual$n_measured_gap &
-                           annual$year >= 2017], PUB_SHOCK_INVERSION)
+                           annual$year >= 2017], PUB_SHOCK_INVERSION),
+  "annual series: the three situations no longer partition the panel" =
+    all(annual$n_absolute_gap + annual$n_measured_gap +
+          annual$n_no_pressure == N_MUNI)
 )
 
-rescale_factor <- max(annual$n_absolute_gap, annual$n_measured_gap) /
-  max(annual$total_deforested_km2)
+PANEL_MUNI  <- "Municípios"
+PANEL_DEFOR <- "Total desmatado (km²)"
+PANELS      <- c(PANEL_MUNI, PANEL_DEFOR)
 
-annual_long <- annual %>%
-  select(year, n_absolute_gap, n_measured_gap) %>%
-  pivot_longer(-year, names_to = "type", values_to = "count") %>%
-  mutate(type = recode(type, n_absolute_gap = "absolute_gap",
-                       n_measured_gap = "measured_gap"))
+SITUATIONS <- c("absolute_gap", "measured_gap", "no_pressure")
 
-p_annual <- ggplot() +
-  annotate("rect", xmin = 2024.5, xmax = 2025.5, ymin = -Inf, ymax = Inf,
-           fill = "#f3e9df", alpha = 0.6) +
-  geom_area(data = annual,
-            aes(x = year, y = total_deforested_km2 * rescale_factor),
-            fill = "#d9ae6a", alpha = 0.25) +
-  geom_line(data = annual_long, aes(x = year, y = count, colour = type),
-            linewidth = 1) +
-  geom_point(data = annual_long, aes(x = year, y = count, colour = type)) +
+muni_series <- annual %>%
+  select(year, n_absolute_gap, n_measured_gap, n_no_pressure) %>%
+  pivot_longer(-year, names_to = "type", values_to = "value") %>%
+  mutate(type  = factor(sub("^n_", "", type), levels = SITUATIONS),
+         panel = factor(PANEL_MUNI, levels = PANELS))
+
+defor_series <- annual %>%
+  transmute(year, value = total_deforested_km2,
+            panel = factor(PANEL_DEFOR, levels = PANELS))
+
+p_annual <- ggplot(mapping = aes(x = year, y = value)) +
+  annotate("rect", xmin = min(PUB_SHOCK_INVERSION) - 0.5,
+           xmax = max(PUB_SHOCK_INVERSION) + 0.5, ymin = -Inf, ymax = Inf,
+           fill = "#f3e9df", alpha = 0.7) +
+  geom_col(data = defor_series, fill = QUINTILE_PALETTE[["5"]], width = 0.7) +
+  geom_line(data = muni_series, aes(colour = type), linewidth = 1) +
+  geom_point(data = muni_series, aes(colour = type)) +
+  facet_grid(panel ~ ., scales = "free_y", switch = "y") +
   scale_colour_manual(values = GAP_PALETTE, labels = GAP_LABELS,
-                      name = "Tipo de lacuna") +
-  scale_y_continuous(name = "Municípios em lacuna", labels = number,
-                     sec.axis = sec_axis(~ . / rescale_factor,
-                                         name = "Total desmatado (km²)",
-                                         labels = number)) +
-  annotate("text", x = 2020.5, y = max(annual_long$count),
-           label = "2019-2022\nchoque de capacidade", size = 3,
-           colour = "#6b756d") +
-  labs(x = NULL) +
-  theme_chart
+                      name = "Situação anual") +
+  scale_y_continuous(labels = number, breaks = scales::breaks_pretty(n = 5)) +
+  expand_limits(y = 0) +
+  labs(x = NULL, y = NULL) +
+  theme_chart +
+  theme(strip.placement   = "outside",
+        strip.background  = element_blank(),
+        strip.text.y.left = element_text(angle = 90))
 
 # -----------------------------------------------------------------------------
 #### Save
 # -----------------------------------------------------------------------------
 
 ggsave(file.path(PATH_OUT, "06_annual_series.png"), p_annual,
-       width = 8, height = 5, dpi = 150)
+       width = 8, height = 6, dpi = 150)

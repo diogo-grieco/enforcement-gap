@@ -17,8 +17,10 @@ COD_INFRACAO, CPF_CNPJ_INFRATOR, VAL_AUTO_INFRACAO
 e estável**: `pid_` + 16 dígitos hexadecimais sorteados, um por autuado. O mapa
 `CPF/CNPJ → pid_` é construído uma única vez (global, cobrindo todos os anos),
 preserva igualdade (mesmo autuado, mesmo `pid_`, em qualquer ano). Toda
-contagem que depende de identidade de autuado (curva de Lorenz da concentração
-de multas, rede de infratores multi-município) é idêntica ao dado original.
+contagem que depende de identidade de autuado é idêntica ao dado original:
+quem reagrupar os autos por autuado obtém os mesmos totais. Nenhum script
+deste repositório lê a coluna hoje; ela é publicada para que esse tipo de
+análise seja possível a partir do dado publicado, sem redistribuir CPF/CNPJ.
 
 Diferente de um hash do próprio CPF/CNPJ, o substituto **não é derivado do
 valor original**: é aleatório. Por isso **o `pid_` não é reversível**: não há
@@ -47,9 +49,9 @@ join por essas colunas recupera nome e CPF/CNPJ para a maior parte das linhas
 e, por transitividade, o mapa `pid_ → CPF/CNPJ`.
 
 Isso é consequência do desenho, não falha dele. O objetivo do `pid_` é permitir
-que as contagens por identidade (Lorenz, Gini, rede multi-município) sejam
-reproduzíveis **sem que este repositório redistribua CPF/CNPJ**, não impedir a
-reidentificação de um registro que o próprio órgão publica com identificação.
+que as contagens por identidade sejam reproduzíveis **sem que este repositório
+redistribua CPF/CNPJ**, não impedir a reidentificação de um registro que o
+próprio órgão publica com identificação.
 Nenhum dado novo é exposto aqui.
 
 Contagem de linhas idêntica ao bruto: 309.116 (verificado coluna a coluna

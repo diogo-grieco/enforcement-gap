@@ -29,7 +29,7 @@ project2/
 ├── exploration/                (validação paralela em R, roda direto sobre os CSVs brutos)
 │   └── exploring_script.R
 ├── viz/                         (suíte de visualização; ver viz/README.md)
-│   ├── 00_setup.R, prep_mesh.R, 01_maps.R … 06_offender_network.R
+│   ├── 00_setup.R, prep_mesh.R, 01_maps.R … 05_panel_effects.R
 │   └── README.md
 ├── deliverables/
 │   ├── EGMS_01_resumo_executivo.docx
@@ -124,7 +124,7 @@ Os valores esperados nos blocos de check (`01_n_ibama_clean = 60707`, `06_total_
 
 | Fonte | Data do snapshot usado | Observação |
 |---|---|---|
-| PRODES (`data/data_prodes/`) | 25/04/2026 (no próprio nome do arquivo) | 2025 é o ano mais recente do painel e diverge -8,3% da taxa nacional consolidada, o maior dos quatro desvios de âncora; segue sujeito a revisão |
+| PRODES (`data/data_prodes/`) | 25/04/2026 (no próprio nome do arquivo) | 2025 é o ano mais recente do painel e diverge -8,3% da taxa nacional consolidada, o maior dos quatro desvios de âncora. O ano já é taxa consolidada (INPE, 10/03/2026, anterior a este snapshot); o desvio é de objeto, não consolidação pendente |
 | IBAMA (`data/data_ibama_public/`) | 25/04/2026 | O nome dos arquivos (`auto_infracao_ano_*.csv`) não carrega a data de download; ela fica registrada aqui e na tabela de fontes do relatório estendido |
 | IBGE, referência (`municipios.json`) | 12/07/2026 | Download manual via navegador (API não respondeu de forma confiável neste projeto) |
 | IBGE, áreas territoriais (`municipality_area_2025.csv`) | 20/07/2026 | Convertido de `.xls` para CSV; ver nota de delimitador em `01_staging.sql` |
@@ -132,7 +132,7 @@ Os valores esperados nos blocos de check (`01_n_ibama_clean = 60707`, `06_total_
 
 Antes de comparar um check `failed` com o pipeline, confirme se algum dos 5 arquivos foi rebaixado depois dessas datas. Se sim, o esperado do check é o que precisa ser atualizado, não o SQL.
 
-O mesmo contrato vale para a suíte `viz/`: os números que os relatórios publicam e que nascem na camada R (Gini e sua população, base das figuras de cancelamento, mediana da defasagem, coeficientes de painel e do event study) estão fixados como constantes `PUB_*` no script que os produz, asseridas com `stopifnot()` logo abaixo do cálculo. Se um deles falhar depois de rebaixar dados, o que precisa mudar é o esperado e o texto que o publica, não o código. `grep "^PUB_" viz/*.R` lista o inventário completo.
+O mesmo contrato vale para a suíte `viz/`: os números que os relatórios publicam e que nascem na camada R (contagens das bandas de direção do EGS, coeficientes de painel e do event study) estão fixados como constantes `PUB_*` ou `N_*` no script que os produz, asseridas com `stopifnot()` logo abaixo do cálculo. Se um deles falhar depois de rebaixar dados, o que precisa mudar é o esperado e o texto que o publica, não o código. `grep "^PUB_" viz/*.R` lista o inventário completo.
 
 ---
 
@@ -169,4 +169,4 @@ Mudanças de substância entre versões, incluindo as que alteraram números pub
 - Resposta = autos lavrados. Embargos, apreensões, ação penal e arrecadação efetiva das multas não entram.
 - EGS é ordinal na prática. A ordenação é robusta, testada por sensibilidade; distâncias entre scores não têm interpretação direta.
 - Amazônia Legal apenas; extensão a outros biomas ou jurisdições exige novo join espacial.
-- Último ano sujeito a revisão: 2025 diverge -8,3% da taxa consolidada do INPE (5.258 km² no painel vs. 5.731 km² oficial), o maior dos quatro desvios de âncora, e a média de 3 anos o inclui. Painel e taxa oficial são objetos distintos (soma municipal vs. apuração estadual), ver §4.1 do relatório estendido.
+- Maior desvio de âncora no último ano: 2025 diverge -8,3% da taxa consolidada do INPE (5.258 km² no painel vs. 5.731 km² oficial), o maior dos quatro desvios de âncora, e a média de 3 anos o inclui. Painel e taxa oficial são objetos distintos (soma municipal vs. apuração estadual), ver §4.1 do relatório estendido. O ano já é consolidado (INPE, 10/03/2026, anterior ao snapshot de 25/04/2026) e segue passível de reprocessamento, como qualquer ano da série: o desvio não se resolve com consolidação.

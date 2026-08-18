@@ -127,7 +127,7 @@ stopifnot(
 )
 
 # -----------------------------------------------------------------------------
-#### 11: coefficient plot
+#### 10: coefficient plot
 # -----------------------------------------------------------------------------
 
 grab <- function(model, term, label) {
@@ -160,7 +160,7 @@ p_coef <- ggplot(coef_df, aes(x = estimate, y = label)) +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 12: event study around a deforestation surge
+#### 11: event study around a deforestation surge
 # -----------------------------------------------------------------------------
 # A raw time series of a few municipalities cannot show the "hangover": it is a
 # partial, average effect net of the deforestation level, not a phenomenon
@@ -241,7 +241,7 @@ p_event <- ggplot(es_df, aes(x = event_time, y = estimate, colour = outcome)) +
 #### Save
 # -----------------------------------------------------------------------------
 
-ggsave(file.path(PATH_OUT, "11_coefficient_plot.png"), p_coef,
+ggsave(file.path(PATH_OUT, "10_coefficient_plot.png"), p_coef,
        width = 8, height = 5, dpi = 150)
-ggsave(file.path(PATH_OUT, "12_event_study.png"), p_event,
+ggsave(file.path(PATH_OUT, "11_event_study.png"), p_event,
        width = 8, height = 5, dpi = 150)

@@ -45,11 +45,6 @@ FILE_ANNUAL     <- "annual_summary.parquet"
 PATH_IBGE       <- "data/data_ibge"
 FILE_MESH       <- "malha_772_amazonia_legal_simplificada.geojson"
 
-# Public release: 13 of 84 raw columns, CPF_CNPJ_INFRATOR replaced with a
-# random surrogate id, NOME_INFRATOR dropped. Cf. data/data_ibama_public.
-PATH_IBAMA      <- "data/data_ibama_public"
-PATTERN_IBAMA   <- "auto_infracao_ano_.*\\.csv"
-
 PATH_OUT        <- "output/visualizations"
 
 # -----------------------------------------------------------------------------
@@ -60,9 +55,6 @@ N_MUNI               <- 772
 N_PANEL              <- 13896    
 N_YEARS              <- 18       
 N_MESH_FEATURES      <- 772      
-N_IBAMA_AMAZON       <- 131196   
-N_IBAMA_DEFOR_AMAZON <- 48063    
-N_IBAMA_DEFOR_CLEAN  <- 43576    
 
 # -----------------------------------------------------------------------------
 #### Loading the feeds (with stopifnot guards)
@@ -95,69 +87,6 @@ stopifnot(
 )
 
 # -----------------------------------------------------------------------------
-#### Raw IBAMA loader (used by 04_raw_ibama.R and 06_offender_network.R)
-# -----------------------------------------------------------------------------
-
-FILE_RAW_CACHE <- "viz_ibama_amazon_raw.parquet"   # filtered notices (cache)
-
-# The 13 columns of the public release.
-IBAMA_COLS <- c("COD_MUNICIPIO", "UF", "DAT_HORA_AUTO_INFRACAO",
-                "DT_FATO_INFRACIONAL", "CD_TERMOS_EMBARGOS",
-                "CD_TERMOS_APREENSAO", "SIT_CANCELADO",
-                "DES_STATUS_FORMULARIO", "TIPO_INFRACAO", "INFRACAO_AREA",
-                "COD_INFRACAO", "CPF_CNPJ_INFRATOR", "VAL_AUTO_INFRACAO")
-
-# Deforestation-type COD_INFRACAO set (mirrors marts.ibama_clean, case 2).
-DEFORESTATION_CODES <- c("409907","409901","452001","430001","431003","468001")
-
-load_ibama_clean <- function() {
-  raw_cache_path <- file.path(PATH_PARQUETS, FILE_RAW_CACHE)
-  panel_geocodes <- ranking$geocode_ibge   # asserted unique above
-
-  if (file.exists(raw_cache_path)) {
-    ibama <- arrow::read_parquet(raw_cache_path)
-  } else {
-    files <- list.files(PATH_IBAMA, pattern = PATTERN_IBAMA, full.names = TRUE)
-    ibama <- purrr::map_dfr(files, function(f) {
-      readr::read_delim(f, delim = ";",
-                        locale = locale(encoding = "UTF-8"),
-                        col_types = cols(.default = "c"),
-                        show_col_types = FALSE) %>%
-        select(all_of(IBAMA_COLS)) %>%   # all_of: fail here if one is renamed
-        filter(COD_MUNICIPIO %in% panel_geocodes)   # the 772 panel munis
-    })
-    arrow::write_parquet(ibama, raw_cache_path)
-  }
-
-  stopifnot("ibama: unexpected row count" = nrow(ibama) == N_IBAMA_AMAZON)
-
-  is_defor <-
-    (ibama$TIPO_INFRACAO == "Flora" & ibama$INFRACAO_AREA == "Desmatamento") |
-    (ibama$TIPO_INFRACAO == "Flora" & is.na(ibama$INFRACAO_AREA) &
-       ibama$COD_INFRACAO %in% DEFORESTATION_CODES) |
-    (is.na(ibama$TIPO_INFRACAO) & ibama$INFRACAO_AREA == "Desmatamento")
-  is_defor[is.na(is_defor)] <- FALSE
-  defor <- ibama[is_defor, ]
-
-  defor <- defor %>%
-    mutate(fine_value = suppressWarnings(
-             as.numeric(str_replace(VAL_AUTO_INFRACAO, ",", "."))),
-           dt_notice  = suppressWarnings(as.Date(DAT_HORA_AUTO_INFRACAO)),
-           dt_fact    = suppressWarnings(as.Date(DT_FATO_INFRACIONAL)),
-           year       = as.integer(format(dt_notice, "%Y")))
-
-  clean <- defor %>%
-    filter(SIT_CANCELADO == "N", DES_STATUS_FORMULARIO == "Lavrado")
-
-  stopifnot(
-    "defor: unexpected row count" = nrow(defor) == N_IBAMA_DEFOR_AMAZON,
-    "clean: unexpected row count" = nrow(clean) == N_IBAMA_DEFOR_CLEAN
-  )
-
-  list(ibama = ibama, defor = defor, clean = clean)
-}
-
-# -----------------------------------------------------------------------------
 #### Shared palette, themes and quantile helper
 # -----------------------------------------------------------------------------
 
@@ -169,7 +98,10 @@ QUINTILE_PALETTE <- c("1" = "#f5f0e1", "2" = "#e8d9a8", "3" = "#d9ae6a",
 # them, since lightness already encodes the quintile. Cf. viz/01_maps.R.
 EGS_RAMP <- c("#d9b8cd", "#bd8fa9", "#996a86", "#734a64", "#4c2c42")
 
-GAP_PALETTE <- c(absolute_gap = "#a63d2f", measured_gap = "#c98a3d",
+# Gold, not the former ochre: brown is the deforestation ramp across the whole
+# suite, and an ochre gap line collided with ramp levels 3 and 4 (CIEDE2000
+# 10.7 and 7.1). The gold also separates better from absolute_gap.
+GAP_PALETTE <- c(absolute_gap = "#a63d2f", measured_gap = "#d4a017",
                  no_pressure  = "#b9c2b6")
 
 GAP_LABELS <- c(absolute_gap = "lacuna absoluta",
@@ -184,6 +116,53 @@ theme_chart <- theme_minimal(base_size = 12) +
   theme(panel.grid.minor = element_blank())
 
 q5 <- function(x) ntile(x, 5)
+
+# -----------------------------------------------------------------------------
+#### EGS direction bands (figures 5 and 8 read the SAME classification)
+# -----------------------------------------------------------------------------
+# One definition, read by both figures, which encode the same quantity in
+# different supports and used to classify it separately.
+#
+# The grey is avg_egs_3y == 0, not n_years_pressure == 0: a municipality whose
+# pressure stopped has a recent mean of zero by 0-fill, so the difference is
+# negative and the old rule called it improving. A direction needs pressure at
+# both ends of the window. 220 of the 381 never had pressure; 161 lost it.
+
+TREND_STABLE <- 0.05
+TREND_STRONG <- 0.20
+
+ranking <- ranking %>%
+  mutate(egs_trend = factor(case_when(
+    avg_egs_3y == 0                          ~ "no_recent_pressure",
+    abs(avg_egs_3y - avg_egs_18y) <
+      TREND_STABLE                           ~ "stable",
+    avg_egs_3y - avg_egs_18y <= -TREND_STRONG ~ "better_hi",
+    avg_egs_3y < avg_egs_18y                 ~ "better",
+    avg_egs_3y - avg_egs_18y >= TREND_STRONG ~ "worse_hi",
+    TRUE                                     ~ "worse"),
+    levels = c("worse_hi", "worse", "stable", "better", "better_hi",
+               "no_recent_pressure")))
+
+N_TREND <- c(worse_hi = 35, worse = 72, stable = 83, better = 126,
+             better_hi = 75, no_recent_pressure = 381)
+
+stopifnot(
+  "egs_trend: published band counts changed" =
+    identical(as.integer(table(ranking$egs_trend)[names(N_TREND)]),
+              as.integer(N_TREND)),
+  "egs_trend: the grey band is not the zero-recent-EGS set" =
+    identical(ranking$egs_trend == "no_recent_pressure",
+              ranking$avg_egs_3y == 0)
+)
+
+TREND_PALETTE <- c(worse_hi = "#a63d2f", worse = "#d19a8f",
+                   stable = "#ece9e0", better = "#7fb096",
+                   better_hi = "#2e6e54",
+                   no_recent_pressure = unname(GAP_PALETTE["no_pressure"]))
+TREND_LABELS  <- c(worse_hi = "piorando muito", worse = "piorando",
+                   stable = "estável", better = "melhorando",
+                   better_hi = "melhorando muito",
+                   no_recent_pressure = "sem pressão recente")
 
 # -----------------------------------------------------------------------------
 #### Output folders

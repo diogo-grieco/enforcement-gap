@@ -7,7 +7,7 @@
 #
 # Purpose: Non-spatial panels on the municipality-grain ranking (report
 #          figures 7, 8 and 14).
-#            7   log-log scatter (deforestation x fines): the EGS formula drawn
+#            7   the EGS formula drawn: its numerator against its denominator
 #            8   historical x recent quadrant (avg_egs_18y vs avg_egs_3y)
 #            14  small multiples: annual EGS of the 5 anchor cases
 # =============================================================================
@@ -16,109 +16,106 @@ source("viz/00_setup.R")
 library(ggrepel)   # non-overlapping point labels
 
 # -----------------------------------------------------------------------------
-#### 7: log-log scatter (the EGS formula drawn)
+#### 1: the EGS formula drawn
 # -----------------------------------------------------------------------------
-# X = total deforested km2 (log10), Y = total fines (log10). On the reference
-# diagonal = proportional response; below it = enforcement gap. Colour =
-# dominant gap type; anchor cases labelled.
-#
-# The caption is built from the two constants below, so text and data cannot
-# diverge. Snapshot values, same nature as the pipeline's expected counts.
-# PUB_N_ZERO_DEFOR counts the parquet column, which is ROUND(SUM(area), 1):
-# 131 sum to exactly zero and 2 round to it, and it is the column the axis
-# reads, so 133 is what disappears from the plot.
 
-PUB_N_ZERO_FINES <- 129   # never fined: floored to R$ 1.000 on the y axis
-PUB_N_ZERO_DEFOR <- 133   # no deforestation: absent (log of zero) on the x axis
+ANCHOR_NAMES <- c("Apuí", "Cumaru do Norte", "Cachoeira do Piriá",
+                  "Nova Nazaré", "Governador Luiz Rocha")
 
-stopifnot(
-  "log-log: zero-fine count changed" =
-    sum(ranking$total_fines == 0) == PUB_N_ZERO_FINES,
-  "log-log: zero-deforestation count changed" =
-    sum(ranking$total_desmatado_km2 == 0) == PUB_N_ZERO_DEFOR
-)
+FORMULA_FLOOR <- 1          # GREATEST(1, ...) in pipeline/03_analytics.sql
+EGS_RAYS      <- c(0.25, 0.5, 1)
 
-# The zero-fine municipalities are floored so they still plot; the
-# zero-deforestation ones are not, because a floor on the pressure axis would
-# invent pressure.
-scatter_df <- ranking %>%
-  mutate(dominant = case_when(
+PUB_N_ZERO_DEFOR <- 133     # dropped: no pressure in 18 years
+PUB_N_AT_FLOOR   <- 106     # of the 639 drawn, response at the formula floor
+PUB_SPEARMAN_AGG <- 0.503   # this figure's ratio vs. the published
+                            # avg_egs_18y, over the municipalities DRAWN
+
+formula_df <- ranking %>%
+  mutate(numerator   = log10(1 + total_desmatado_km2),
+         denominator = pmax(FORMULA_FLOOR,
+                            sqrt(log10(1 + n_infractions) *
+                                   log10(1 + total_fines))),
+         dominant = factor(case_when(
            n_absolute_gap >= n_measured_gap &
              n_absolute_gap >= n_no_pressure ~ "absolute_gap",
            n_measured_gap >= n_no_pressure   ~ "measured_gap",
            TRUE                              ~ "no_pressure"),
-         dominant = factor(dominant, levels = c("absolute_gap",
-                                                "measured_gap",
-                                                "no_pressure")),
-         total_fines_plot = pmax(total_fines, 1000))
+           levels = c("absolute_gap", "measured_gap", "no_pressure")))
 
-ANCHOR_NAMES <- c("Apuí", "Cumaru do Norte", "Cachoeira do Piriá",
-                  "Nova Nazaré", "Governador Luiz Rocha")
-anchors <- scatter_df %>% filter(municipality_name %in% ANCHOR_NAMES)
+stopifnot("formula plot: zero-deforestation count changed" =
+            sum(formula_df$total_desmatado_km2 == 0) == PUB_N_ZERO_DEFOR)
 
+formula_df <- formula_df %>% filter(total_desmatado_km2 > 0)
+
+# Measured on the DRAWN set: including the 133 dropped lifts it to 0.701 for a
+# hollow reason, since their ratio and their EGS are both zero.
+stopifnot(
+  "formula plot: drawn count changed" =
+    nrow(formula_df) == N_MUNI - PUB_N_ZERO_DEFOR,
+  "formula plot: floor count changed" =
+    sum(formula_df$denominator == FORMULA_FLOOR) == PUB_N_AT_FLOOR,
+  "formula plot: aggregate-vs-index rank correlation changed" =
+    round(cor(formula_df$numerator / formula_df$denominator,
+              formula_df$avg_egs_18y, method = "spearman"), 3) ==
+      PUB_SPEARMAN_AGG
+)
+
+anchors <- formula_df %>% filter(municipality_name %in% ANCHOR_NAMES)
 stopifnot("anchors: expected 5 anchor cases" =
             nrow(anchors) == length(ANCHOR_NAMES))
 
-# The dashed diagonal is a CHOSEN proportionality reference (R$ 100k per km2),
-# not the EGS = 1 locus: EGS also depends on n_infractions, which is on neither
-# axis, and is annual, while this plot aggregates 18 years. Earlier versions
-# called it "the EGS = 1 boundary"; corrected by the sixth audit.
-p_scatter <- ggplot(scatter_df,
-                    aes(x = total_desmatado_km2, y = total_fines_plot)) +
-  geom_abline(slope = 1, intercept = log10(1e5), linetype = "dashed",
-              colour = "grey60") +
-  geom_point(aes(colour = dominant), alpha = 0.6, size = 1.8) +
-  scale_x_log10(labels = label_number(scale_cut = cut_br_scale())) +
-  scale_y_log10(labels = label_number(scale_cut = cut_br_scale())) +
-  scale_colour_manual(values = GAP_PALETTE, labels = GAP_LABELS,
-                      name = "Tipo dominante") +
-  # seed: ggrepel jitters labels AT DRAW TIME, so the same plot object rendered
-  # twice differs byte-for-byte. set.seed() before the plot would NOT work.
+X_MAX <- ceiling(max(formula_df$numerator) * 10) / 10
+Y_MAX <- ceiling(max(formula_df$denominator) * 10) / 10
+ray_labels <- data.frame(
+  egs   = EGS_RAYS,
+  x     = 0.88 * pmin(X_MAX, Y_MAX * EGS_RAYS),
+  y     = 0.88 * pmin(Y_MAX, X_MAX / EGS_RAYS),
+  label = paste("EGS", sub("\\.", ",", as.character(EGS_RAYS))))
+
+p_scatter <- ggplot(formula_df, aes(x = numerator, y = denominator)) +
+  geom_abline(slope = 1 / EGS_RAYS, intercept = 0, linetype = "dashed",
+              colour = "grey65") +
+  geom_hline(yintercept = FORMULA_FLOOR, colour = "grey75", linewidth = 0.3) +
+  # shape 21 with a white stroke: full-strength colour and readable overlap,
+  # the same device the maps use between municipalities.
+  geom_point(aes(fill = dominant), shape = 21, colour = "white",
+             stroke = 0.25, size = 2.1) +
+  geom_label(data = ray_labels, aes(x = x, y = y, label = label),
+             colour = "grey45", fill = "white", label.size = 0,
+             size = 2.8, label.padding = unit(0.12, "lines")) +
+  scale_fill_manual(values = GAP_PALETTE, labels = GAP_LABELS,
+                    name = "Tipo dominante") +
+  scale_x_continuous(breaks = 0:4,
+                     labels = number(10^(0:4) - 1, accuracy = 1)) +
   geom_text_repel(data = anchors, aes(label = municipality_name),
                   size = 3, min.segment.length = 0, seed = 42) +
-  labs(caption = paste(
-         sprintf(paste("Multas zeradas (%d/%d) fixadas em R$ 1.000 para",
-                       "permanecer na escala log;"),
-                 PUB_N_ZERO_FINES, N_MUNI),
-         sprintf(paste("os %d municípios sem desmatamento no período não",
-                       "aparecem (log de zero)."),
-                 PUB_N_ZERO_DEFOR), sep = "\n"),
-       x = "Total desmatado (km², log)",
-       y = "Total de multas (R$ deflacionado, log)") +
+  labs(x = "Numerador: km² desmatados",
+       y = "Denominador: autos × multas (média geométrica)") +
   theme_chart +
   theme(legend.position = "right")
 
 # -----------------------------------------------------------------------------
 #### 8: historical x recent quadrant
 # -----------------------------------------------------------------------------
-# X = avg_egs_18y (history), Y = avg_egs_3y (2023-25). Above the identity line
-# = worsening recently; below = improving. Size = years of pressure.
 
 p_quadrant <- ggplot(ranking, aes(x = avg_egs_18y, y = avg_egs_3y)) +
   geom_abline(slope = 1, intercept = 0, linetype = "dashed",
               colour = "grey60") +
-  geom_point(aes(size = n_years_pressure,
-                 colour = avg_egs_3y > avg_egs_18y), alpha = 0.6) +
-  scale_colour_manual(values = c("TRUE" = "#a63d2f", "FALSE" = "#2e6e54"),
-                      labels = c("TRUE" = "piorando",
-                                 "FALSE" = "melhorando"), name = NULL) +
-  scale_size_continuous(range = c(0.5, 5), name = "Anos de pressão") +
+  geom_point(aes(fill = egs_trend), shape = 21, colour = "white",
+             stroke = 0.25, size = 2.4) +
+  scale_fill_manual(values = TREND_PALETTE, labels = TREND_LABELS,
+                    name = NULL) +
   scale_x_continuous(labels = number) +
   scale_y_continuous(labels = number) +
-  # order: with two guides and neither declaring one, ggplot2 does not
-  # guarantee a stable arrangement between sessions, and the swap breaks the
-  # byte-identity between the PNG on disk and the one in the deliverables.
-  # Colour first: it is the primary encoding and the one the caption refers to.
-  guides(colour = guide_legend(order = 1), size = guide_legend(order = 2)) +
   geom_text_repel(data = ranking %>% slice_max(avg_egs_18y, n = 8),
                   aes(label = municipality_name), size = 3,
-                  min.segment.length = 0, seed = 42) +   # seed: see item 5
+                  min.segment.length = 0, seed = 42) +   # seed: see item 7
   labs(x = "EGS médio histórico (2008–2025)",
        y = "EGS médio recente (2023–2025)") +
   theme_chart
 
 # -----------------------------------------------------------------------------
-#### 14: small multiples, annual EGS of the 5 anchor cases
+#### 9: small multiples, annual EGS of the 5 anchor cases
 # -----------------------------------------------------------------------------
 
 anchor_series <- final %>%
@@ -141,9 +138,9 @@ p_anchors <- ggplot(anchor_series, aes(x = year, y = egs)) +
 #### Save
 # -----------------------------------------------------------------------------
 
-ggsave(file.path(PATH_OUT, "07_loglog_scatter.png"), p_scatter,
+ggsave(file.path(PATH_OUT, "01_egs_formula.png"), p_scatter,
        width = 8, height = 6, dpi = 150)
 ggsave(file.path(PATH_OUT, "08_quadrant.png"), p_quadrant,
        width = 8, height = 6, dpi = 150)
-ggsave(file.path(PATH_OUT, "14_anchor_small_multiples.png"), p_anchors,
+ggsave(file.path(PATH_OUT, "09_anchor_small_multiples.png"), p_anchors,
        width = 7.5, height = 4.6, dpi = 150)

@@ -101,7 +101,7 @@ outline_layer <- list(
 )
 
 # -----------------------------------------------------------------------------
-#### 1: deforestation, absolute km2 (the raw numerator)
+#### 2: deforestation, absolute km2 (the raw numerator)
 # -----------------------------------------------------------------------------
 
 m_defor_abs <- ggplot(map_data) +
@@ -113,7 +113,7 @@ m_defor_abs <- ggplot(map_data) +
   theme_map
 
 # -----------------------------------------------------------------------------
-#### 2: share of the territory deforested (numerator normalised)
+#### 3: share of the territory deforested (numerator normalised)
 # -----------------------------------------------------------------------------
 
 m_defor_pct <- ggplot(map_data) +
@@ -125,7 +125,7 @@ m_defor_pct <- ggplot(map_data) +
   theme_map
 
 # -----------------------------------------------------------------------------
-#### 3: the denominator (autos and fines, geometric mean)
+#### 4: the denominator (autos and fines, geometric mean)
 # -----------------------------------------------------------------------------
 
 N_NO_FINE_GAP <- 66
@@ -133,8 +133,8 @@ N_FINED       <- 486
 
 map_data <- map_data %>%
   mutate(
-    response = sqrt(log10(1 + n_infractions) * log10(1 + total_fines)),
-    q_fines  = factor(case_when(
+    response   = sqrt(log10(1 + n_infractions) * log10(1 + total_fines)),
+    q_response = factor(case_when(
       !has_pressure    ~ "none",
       total_fines == 0 ~ "gap",
       TRUE             ~ as.character(
@@ -143,34 +143,35 @@ map_data <- map_data %>%
       levels = c("none", "gap", "1", "2", "3", "4", "5")))
 
 stopifnot(
-  "q_fines: absolute-gap count changed" =
-    sum(map_data$q_fines == "gap") == N_NO_FINE_GAP,
-  "q_fines: fined count changed" =
-    sum(map_data$q_fines %in% as.character(1:5)) == N_FINED,
-  "q_fines: the grey is no longer the shared no-pressure set" =
-    identical(map_data$q_fines == "none", !map_data$has_pressure),
+  "q_response: absolute-gap count changed" =
+    sum(map_data$q_response == "gap") == N_NO_FINE_GAP,
+  "q_response: fined count changed" =
+    sum(map_data$q_response %in% as.character(1:5)) == N_FINED,
+  "q_response: the grey is no longer the shared no-pressure set" =
+    identical(map_data$q_response == "none", !map_data$has_pressure),
   "response: the geometric mean is no longer count-dominated" =
-    round(cor(rank(map_data$response[map_data$q_fines %in% as.character(1:5)]),
-              rank(map_data$n_infractions[map_data$q_fines %in%
+    round(cor(rank(map_data$response[map_data$q_response %in%
+                                     as.character(1:5)]),
+              rank(map_data$n_infractions[map_data$q_response %in%
                                             as.character(1:5)])), 3) == 0.993
 )
 
-FINES_PALETTE <- c(none = CAT_NONE, gap = CAT_GAP,
-                   "1" = "#9fb9dd", "2" = "#7c9bca", "3" = "#5c7cb0",
-                   "4" = "#405f92", "5" = "#26406e")
-FINES_LABELS  <- c(none = "sem pressão", gap = "com pressão, sem multa",
-                   "1" = "1", "2" = "2", "3" = "3", "4" = "4", "5" = "5")
+RESPONSE_PALETTE <- c(none = CAT_NONE, gap = CAT_GAP,
+                      "1" = "#9fb9dd", "2" = "#7c9bca", "3" = "#5c7cb0",
+                      "4" = "#405f92", "5" = "#26406e")
+RESPONSE_LABELS  <- c(none = "sem pressão", gap = "com pressão, sem multa",
+                      "1" = "1", "2" = "2", "3" = "3", "4" = "4", "5" = "5")
 
-m_fines <- ggplot(map_data) +
-  geom_sf(aes(fill = q_fines), colour = "white", linewidth = 0.05) +
-  scale_fill_manual(values = FINES_PALETTE, labels = FINES_LABELS,
+m_response <- ggplot(map_data) +
+  geom_sf(aes(fill = q_response), colour = "white", linewidth = 0.05) +
+  scale_fill_manual(values = RESPONSE_PALETTE, labels = RESPONSE_LABELS,
                     name = "Quintil da resposta federal\n(autos x multas)") +
   state_layer +
   outline_layer +
   theme_map
 
 # -----------------------------------------------------------------------------
-#### 4: mean 18y EGS (the ratio)
+#### 5: mean 18y EGS (the ratio)
 # -----------------------------------------------------------------------------
 
 m_egs <- ggplot(map_data) +
@@ -182,42 +183,8 @@ m_egs <- ggplot(map_data) +
   theme_map
 
 # -----------------------------------------------------------------------------
-#### 5: direction of travel (where the ratio is going)
+#### 7: direction of travel (where the ratio is going)
 # -----------------------------------------------------------------------------
-# avg_egs_3y - avg_egs_18y, the quantity figure 8 splits on its identity line.
-
-TREND_STABLE <- 0.05
-TREND_STRONG <- 0.20
-
-map_data <- map_data %>%
-  mutate(egs_trend = factor(case_when(
-    n_years_pressure == 0            ~ "no_pressure",
-    abs(avg_egs_3y - avg_egs_18y) <
-      TREND_STABLE                   ~ "stable",
-    avg_egs_3y - avg_egs_18y <=
-      -TREND_STRONG                  ~ "better_hi",
-    avg_egs_3y < avg_egs_18y         ~ "better",
-    avg_egs_3y - avg_egs_18y >=
-      TREND_STRONG                   ~ "worse_hi",
-    TRUE                             ~ "worse"),
-    levels = c("worse_hi", "worse", "stable", "better", "better_hi",
-               "no_pressure")))
-
-N_TREND <- c(worse_hi = 35, worse = 72, stable = 149, better = 202,
-             better_hi = 94, no_pressure = 220)
-
-stopifnot("egs_trend: published band counts changed" =
-            identical(as.integer(table(map_data$egs_trend)[names(N_TREND)]),
-                      as.integer(N_TREND)))
-
-# The two extremes are figure 8's two colours: same quantity, same vocabulary.
-TREND_PALETTE <- c(worse_hi = "#a63d2f", worse = "#d19a8f",
-                   stable = "#ece9e0", better = "#7fb096",
-                   better_hi = "#2e6e54", no_pressure = CAT_NONE)
-TREND_LABELS  <- c(worse_hi = "piorando muito", worse = "piorando",
-                   stable = "estável", better = "melhorando",
-                   better_hi = "melhorando muito",
-                   no_pressure = "sem pressão")
 
 m_egs_trend <- ggplot(map_data) +
   geom_sf(aes(fill = egs_trend), colour = "white", linewidth = 0.05) +
@@ -231,14 +198,14 @@ m_egs_trend <- ggplot(map_data) +
 #### Save
 # -----------------------------------------------------------------------------
 
-ggsave(file.path(PATH_OUT, "01_deforestation_abs.png"), m_defor_abs,
+ggsave(file.path(PATH_OUT, "02_deforestation_abs.png"), m_defor_abs,
        width = 8, height = 7, dpi = 150)
-ggsave(file.path(PATH_OUT, "02_deforestation_pct.png"), m_defor_pct,
+ggsave(file.path(PATH_OUT, "03_deforestation_pct.png"), m_defor_pct,
        width = 8, height = 7, dpi = 150)
-ggsave(file.path(PATH_OUT, "03_fines_map.png"), m_fines,
+ggsave(file.path(PATH_OUT, "04_federal_response.png"), m_response,
        width = 8, height = 7, dpi = 150)
-ggsave(file.path(PATH_OUT, "04_egs_mean18y.png"), m_egs,
+ggsave(file.path(PATH_OUT, "05_egs_mean18y.png"), m_egs,
        width = 8, height = 7, dpi = 150)
 
-ggsave(file.path(PATH_OUT, "05_egs_trend.png"), m_egs_trend,
+ggsave(file.path(PATH_OUT, "07_egs_trend.png"), m_egs_trend,
        width = 8, height = 7, dpi = 150)

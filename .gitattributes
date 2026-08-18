@@ -1,6 +1,6 @@
 # Quarta auditoria (2026-07-21, Fix S20): desliga a normalização de EOL.
 # O working tree aparecia como "modified" em 4 arquivos (incluindo o CSV
-# do IPCA, snapshot de reprodutibilidade) apenas por churn CRLF/LF —
+# do IPCA, snapshot de reprodutibilidade) apenas por churn CRLF/LF:
 # conteúdo idêntico. Com * -text, o git trata tudo como binário para fins
 # de EOL e o estado do clone reflete o conteúdo real.
 * -text
