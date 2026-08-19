@@ -139,7 +139,7 @@ O mesmo contrato vale para a suíte `viz/`: os números que os relatórios publi
 
 ## `.gitignore`
 
-O arquivo [`.gitignore`](.gitignore) na raiz é a fonte única; cada regra traz no próprio arquivo o comentário que a justifica. Em resumo, ficam de fora: artefatos do RStudio; o banco `project2.duckdb`, o binário do CLI e os `.wal`; o dado bruto do IBAMA com identificação do autuado (`data/data_ibama/`); a malha antes da simplificação; os caches intermediários da suíte `viz/`; e o material interno do processo de pesquisa (`references/`, `CHANGELOG.md`).
+O arquivo [`.gitignore`](.gitignore) na raiz é a fonte única; cada regra traz no próprio arquivo o comentário que a justifica. Em resumo, ficam de fora: artefatos do RStudio; o banco `project2.duckdb`, o binário do CLI e os `.wal`; o dado bruto do IBAMA com identificação do autuado (`data/data_ibama/`); a malha antes da simplificação; os caches intermediários da suíte `viz/`; e o material interno do processo de pesquisa (`references/`, que inclui o `CHANGELOG.md`).
 
 Dados brutos (`data/data_prodes/`, `data/data_ibama_public/`, `data/data_ibge/`, `data/data_ipca/`) e os parquets finais (`output/parquets/`) são versionados: é o que torna o repositório reprodutível a partir de um clone limpo, sem depender de um download externo. `output/visualizations/` e `deliverables/` também são versionados, os resultados e os textos finais ficam legíveis direto no GitHub, além do depósito com DOI no Zenodo/preprint.
 

@@ -44,6 +44,12 @@
 --     negative, and a direction needs pressure at both ends of the
 --     window. Thresholds apply to the ROUNDED columns above, so the
 --     band is decided on the value the parquet stores.
+-- (k) GAP_DOMINANT: which of the three annual situations a municipality
+--     spends most of its 18 years in. Classified here and not in the figure
+--     that colours by it, because the precedence that breaks ties is a
+--     choice, not a drawing detail: it runs from the most severe category to
+--     the least (absolute_gap, then measured_gap, then no_pressure), and it
+--     decides the category of 23 of the 772.
 ----------------------------------------------------------
 
 ----------------------------------------------------------
@@ -159,7 +165,16 @@ SELECT
         WHEN avg_egs_3y < avg_egs_18y                  THEN 'better'
         WHEN avg_egs_3y - avg_egs_18y >= 0.20          THEN 'worse_hi'
         ELSE                                                'worse'
-    END                                                           AS egs_trend
+    END                                                           AS egs_trend,
+    -- Ties: 23 of the 772. Precedence runs from the most severe category to
+    -- the least, so a municipality split evenly between absolute and measured
+    -- is called absolute.
+    CASE
+        WHEN n_absolute_gap >= n_measured_gap
+         AND n_absolute_gap >= n_no_pressure        THEN 'absolute_gap'
+        WHEN n_measured_gap >= n_no_pressure        THEN 'measured_gap'
+        ELSE                                             'no_pressure'
+    END                                                           AS gap_dominant
 FROM project2.analytics.egs_final e
 LEFT JOIN project2.marts.municipality_area a
     ON e.geocode_ibge = a.geocode_ibge

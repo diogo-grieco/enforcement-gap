@@ -41,11 +41,9 @@ defor_series <- annual %>%
   transmute(year, value = total_deforested_km2,
             panel = factor(PANEL_DEFOR, levels = PANELS))
 
-# facet_grid(scales = "free_y") shares one scale spec, and breaks_pretty left
-# the deforestation panel with three ticks (0, 5.000, 10.000), so the three
-# tallest bars, all above 12.000 km2, had no reference to be read against.
-# Braces are load-bearing: at top level R closes the if at end of line and a
-# bare else on the next line is a parse error.
+# free_y shares one scale spec, and breaks_pretty gave the bar panel three
+# ticks, leaving the tallest bars with nothing to be read against. Braces are
+# load-bearing: a bare else on the next line is a parse error in R.
 breaks_by_panel <- function(limits) {
   if (max(limits) > 1000) scales::breaks_width(2500)(limits)
   else                    scales::breaks_width(100)(limits)

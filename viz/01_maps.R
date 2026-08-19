@@ -5,11 +5,9 @@
 #
 # Author: Diogo Grieco
 #
-# Purpose: The five choropleths (report figures 2 to 5 and 7). Written in the
-#          order that builds the index: numerator, numerator normalised,
-#          denominator, ratio, direction. The report interleaves them with the
-#          other figures, so their numbers are not contiguous. All
-#          rank-quintiles over the SAME 552 municipalities.
+# Purpose: the five choropleths (report figures 2 to 5 and 7), in the order
+#          that builds the index: numerator, numerator normalised, denominator,
+#          ratio, direction. Figure 4 excepted, all quintile the same 552.
 # =============================================================================
 
 source("viz/00_setup.R")
@@ -18,8 +16,7 @@ library(sf)   # the only script that needs it
 # -----------------------------------------------------------------------------
 #### Municipal mesh
 # -----------------------------------------------------------------------------
-# Read here and not in 00_setup.R: 2,7 MB of GeoJSON and 772 polygons that
-# only this script uses.
+# Read here, not in 00_setup.R: 2,7 MB of GeoJSON that only this script uses.
 
 muni_mesh <- st_read(file.path(PATH_IBGE, FILE_MESH), quiet = TRUE) %>%
   mutate(code_muni = as.character(as.integer(code_muni)))
@@ -46,8 +43,7 @@ stopifnot(
 # -----------------------------------------------------------------------------
 #### Rank-quintiles over one population, shared by figures 1, 2, 4 and 5
 # -----------------------------------------------------------------------------
-# The 220 without a year above the 1 km2 threshold are a category, not a low
-# quintile.
+# The 220 without a year above the threshold are a category, not a low quintile.
 
 N_NO_PRESSURE <- 220
 
@@ -78,8 +74,7 @@ CAT_GAP  <- unname(GAP_PALETTE["absolute_gap"])
 Q_LABELS <- c("0" = "sem pressão", "1" = "1", "2" = "2",
               "3" = "3", "4" = "4", "5" = "5")
 
-# One ramp per quantity: brown for the numerator, blue for the denominator,
-# plum for the ratio. A shared ramp would read as a shared scale.
+# One ramp per quantity: a shared one would read as a shared scale.
 DEFOR_PALETTE <- c("0" = CAT_NONE, QUINTILE_PALETTE)
 EGS_PALETTE   <- c("0" = CAT_NONE, setNames(EGS_RAMP, as.character(1:5)))
 

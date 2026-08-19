@@ -5,36 +5,26 @@
 #
 # Author: Diogo Grieco
 #
-# Purpose: The panel-regression findings, in fixest (report figures 10
-#          and 11).
-#            10 coefficient plot: five coefficients from three of the models
-#            11 event study around a year-on-year increase in deforestation,
-#               with pre-event (placebo) coefficients
-#          Municipality + year FE, municipality-clustered SEs: the estimator
-#          the dissertation proposes, and the one the Python pilot used.
+# Purpose: report figures 10 and 11, and the models behind them. Municipality
+#          and year FE, municipality-clustered SEs.
+#
+# The one script in the suite that estimates before it draws: DuckDB has no
+# fixed-effects estimator, so this cannot move upstream like gap_type,
+# egs_trend or gap_dominant did. Declared exception; see viz/README.md.
+# The PUB_* constants below are what replaces layer purity here.
 # =============================================================================
 
 source("viz/00_setup.R")
 library(fixest)
 
-# One definition, read by figures 10 and 11: both plot the same two responses.
-# Blue, the suite's ramp for the federal response, because that is what these
-# two series are. The green/red pair used before was borrowed from the EGS
-# direction bands (figures 7 and 8), where red means "piorando muito" and green
-# "melhorando muito": the same colour carried two unrelated meanings.
-# Separation is carried by lightness, not hue, which is what survives colour
-# blindness: CIEDE2000 47,2 in normal vision and 47,2 / 47,3 under protanopia
-# and deuteranopia, against 49,3 / 9,9 / 18,3 for the green-red pair.
-# The ordinal reading a two-shade ramp invites is the correct one here: the
-# notice is the state showing up, the fine is how hard it hit.
+# Read by figures 10 and 11. Lightness, not hue: it survives colour blindness.
 OUTCOME_COLOURS <- c(autos  = unname(RESPONSE_RAMP[1]),
                      multas = unname(RESPONSE_RAMP[5]))
 
 # -----------------------------------------------------------------------------
 #### Build the panel with lags/leads WITHIN municipality
 # -----------------------------------------------------------------------------
-# The panel is balanced (772 x 18); lag/lead within geocode anyway. log10(1+x)
-# matches the EGS convention and keeps logs defined at zero.
+# log10(1+x) matches the EGS convention and keeps logs defined at zero.
 
 panel <- final %>%
   arrange(geocode_ibge, year) %>%
@@ -71,10 +61,8 @@ m4 <- feols(log_infra_f1 ~ d_pos + d_neg + log_area + log_area_f1 |
               geocode_ibge + year,
             data = panel, cluster = ~geocode_ibge)                 # asymmetry
 
-# The same specifications with the FINE as the outcome. Notices answer "did the
-# state show up"; money answers "how hard did it hit", and the two diverge:
-# they correlate 0.722 in rank at the annual grain, not 0.99. Figure 10 plots
-# both, which is why m1f and m4f exist beside m1 and m4.
+# Same specifications with the FINE as outcome. The two responses diverge:
+# rank correlation 0.722 at the annual grain, not 0.99.
 m1f <- feols(log_fine ~ log_area + log_area_l1 | geocode_ibge + year,
              data = panel, cluster = ~geocode_ibge)              # level, fines
 m2f <- feols(log_fine_f1 ~ d_log_area + log_area | geocode_ibge + year,
@@ -85,21 +73,16 @@ m4f <- feols(log_fine_f1 ~ d_pos + d_neg + log_area + log_area_f1 |
 
 etable(m1, m1f, m2, m2f, m3, m4, m4f)   # full tables for the write-up
 
-# ---------------------------------------------------------------------------
-# Values PUBLISHED in the extended report, section 5.5, at the precision the
-# text publishes them. Until the seventh audit this layer had no guard, and a
-# coefficient from the earlier Python pilot survived the migration to fixest
-# and was published. Comparison is by equality on the ROUNDED value, because
-# what is protected is the published sentence, not the coefficient.
-# ---------------------------------------------------------------------------
+# Values PUBLISHED in section 5.5, at the precision the text uses. Compared on
+# the ROUNDED value: what is protected is the sentence, not the coefficient.
 PUB_M1_LOG_AREA    <-  0.080 ; PUB_M1_LOG_AREA_L1 <- 0.056
 PUB_M2_D_LOG_AREA  <- -0.057
 PUB_M2F_D_LOG_AREA <- -0.399
 PUB_M1F_LOG_AREA   <-  0.382 ; PUB_M1F_LOG_AREA_L1 <- 0.323
 PUB_M4F_D_POS      <- -0.501 ; PUB_M4F_D_NEG       <- -0.274
 PUB_M3_D_LOG_AREA  <- -0.069   # raw -0.06852515, 2.5e-5 from the rounding
-                               # boundary: if THIS check fails alone, read the
-                               # raw value before concluding the data moved.
+                               # boundary: if only THIS fails, read the raw
+                               # value before assuming the data moved.
 PUB_M4_D_POS       <- -0.114 ; PUB_M4_D_POS_SE    <- 0.032
 PUB_M4_D_NEG       <- -0.005
 PUB_N_OBS <- c(m1 = 13124, m1f = 13124, m2 = 12352, m2f = 12352,
@@ -138,6 +121,10 @@ stopifnot(
           PUB_N_OBS[c("m1","m1f","m2","m2f","m3","m4","m4f")])
 )
 
+# #############################################################################
+# SECOND HALF: FIGURES. Above, estimation and guards. Below, drawing only.
+# #############################################################################
+
 # -----------------------------------------------------------------------------
 #### 10: coefficient plot
 # -----------------------------------------------------------------------------
@@ -148,11 +135,9 @@ grab <- function(model, term, label, outcome) {
              estimate = ct[term, "Estimate"],
              se       = ct[term, "Std. Error"], row.names = NULL)
 }
-# m3 (t+2) is estimated and checked above but not plotted: it backs the
-# "persists at t+2" sentence in the report, and a separate row would add a
-# persistence claim that the autocorrelation of d_log_area produces anyway.
-# Every row is a term of DEFORESTATION; the response is the colour. The axis
-# title carries the word once instead of repeating it in five labels.
+# m3 is estimated and checked above but not plotted: it backs one sentence in
+# the report, and d_log_area is autocorrelated enough to make a t+2 row cheap.
+# Every row is a term of DEFORESTATION; the response is the colour.
 ROWS <- c("Nível em t\n(resposta em t)",
           "Nível em t-1\n(resposta em t)",
           "Variação anual em t\n(resposta em t+1)",
@@ -177,17 +162,14 @@ coef_df <- bind_rows(
          label   = factor(label, levels = rev(ROWS)),
          outcome = factor(outcome, levels = c(AUTOS, MULTAS)))
 
-# Shared x axis, no rescaling: both coefficients are elasticities in the same
-# log10-log10 units, so the money bars being longer IS the finding. The notice
-# series looks compressed for that reason, not because of a plotting choice.
+# Shared x axis, no rescaling: same log10-log10 units on both sides, so the
+# money bars being longer is the finding, not a plotting artefact.
 p_coef <- ggplot(coef_df, aes(x = estimate, y = label, colour = outcome)) +
   geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
   geom_pointrange(aes(xmin = lo, xmax = hi), size = 0.45,
                   position = position_dodge(width = 0.55)) +
   scale_colour_manual(values = OUTCOME_COLOURS, name = NULL) +
-  # position_dodge puts the first level at the lower position, so multas is
-  # drawn above autos inside each row; reversing the key makes the legend read
-  # in the order the reader sees on the panel.
+  # dodge puts the first level lower, so the key has to be reversed to match.
   guides(colour = guide_legend(reverse = TRUE)) +
   scale_x_continuous(labels = number) +
   labs(x = "Coeficiente (IC 95%)", y = "Termo de desmatamento") +
@@ -196,18 +178,9 @@ p_coef <- ggplot(coef_df, aes(x = estimate, y = label, colour = outcome)) +
 # -----------------------------------------------------------------------------
 #### 11: event study around a year-on-year increase in deforestation
 # -----------------------------------------------------------------------------
-# A raw time series of a few municipalities cannot show a smaller response
-# after an increase: it is a partial, average effect net of the deforestation
-# level, not a phenomenon visible in any single unit. The object is an event
-# study: leads and lags of the increase magnitude (d_pos), controlling the
-# contemporaneous level, with municipality + year FE.
-#
-# Reading: the single-lag result in figure 11 is the strongest cut. Distributed
-# across event time it WEAKENS: for autos the path is directionally consistent
-# (flat pre-event coefficients, negative at 0/+1/+2) but not individually
-# significant; for fines it does not hold. Both are plotted with 95% CIs so the
-# fragility is visible. The pre-event coefficients at -2 and -1 are the placebo
-# test for pre-trends.
+# Leads and lags of d_pos, controlling the contemporaneous level. The pre-event
+# coefficients at -2 and -1 are the placebo test for pre-trends. Plotted with
+# 95% CIs because the result weakens here and the fragility has to be visible.
 
 es_panel <- panel %>%
   arrange(geocode_ibge, year) %>%
@@ -236,8 +209,7 @@ event_path <- function(model, outcome) {
              se       = ct[, "Std. Error"], row.names = NULL)
 }
 
-# Table 4 of the extended report. This is the guard that would have caught the
-# error: six of the ten published coefficients did not come from this model.
+# Table 4 of the extended report.
 PUB_ES_TERMS  <- c("dpos_lead2", "dpos_lead1", "dpos_lag0",
                    "dpos_lag1", "dpos_lag2")
 PUB_ES_AUTOS  <- c( 0.036, -0.001, -0.063, -0.034, -0.015)
