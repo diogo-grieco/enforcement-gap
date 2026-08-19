@@ -41,6 +41,16 @@ defor_series <- annual %>%
   transmute(year, value = total_deforested_km2,
             panel = factor(PANEL_DEFOR, levels = PANELS))
 
+# facet_grid(scales = "free_y") shares one scale spec, and breaks_pretty left
+# the deforestation panel with three ticks (0, 5.000, 10.000), so the three
+# tallest bars, all above 12.000 km2, had no reference to be read against.
+# Braces are load-bearing: at top level R closes the if at end of line and a
+# bare else on the next line is a parse error.
+breaks_by_panel <- function(limits) {
+  if (max(limits) > 1000) scales::breaks_width(2500)(limits)
+  else                    scales::breaks_width(100)(limits)
+}
+
 p_annual <- ggplot(mapping = aes(x = year, y = value)) +
   annotate("rect", xmin = min(PUB_SHOCK_INVERSION) - 0.5,
            xmax = max(PUB_SHOCK_INVERSION) + 0.5, ymin = -Inf, ymax = Inf,
@@ -51,7 +61,7 @@ p_annual <- ggplot(mapping = aes(x = year, y = value)) +
   facet_grid(panel ~ ., scales = "free_y", switch = "y") +
   scale_colour_manual(values = GAP_PALETTE, labels = GAP_LABELS,
                       name = "Situação anual") +
-  scale_y_continuous(labels = number, breaks = scales::breaks_pretty(n = 5)) +
+  scale_y_continuous(labels = number, breaks = breaks_by_panel) +
   expand_limits(y = 0) +
   labs(x = NULL, y = NULL) +
   theme_chart +

@@ -16,22 +16,15 @@
 # -----------------------------------------------------------------------------
 
 library(tidyverse)
-library(sf)
 library(arrow)
 library(scales)
+# sf is NOT loaded here: only 01_maps.R draws maps, and attaching sf links
+# GDAL, GEOS and PROJ for every script that sources this file.
 
-# Brazilian locale (comma decimal, dot thousands) on every axis and label, so
-# the figures match the ABNT text. These shadow the scales:: names
-percent <- function(x, ...)
-  scales::percent(x, decimal.mark = ",", big.mark = ".", ...)
+# Brazilian locale (comma decimal, dot thousands) on every axis label, so the
+# figures match the ABNT text. Shadows the scales:: name of the same shape.
 number <- function(x, ...)
   scales::number(x, decimal.mark = ",", big.mark = ".", ...)
-label_number <- function(...)
-  scales::label_number(decimal.mark = ",", big.mark = ".", ...)
-
-# Short-scale suffixes in pt-BR. scales::cut_short_scale() returns K/M/B/T
-cut_br_scale <- function()
-  c(" " = 0, "mil" = 1e3, "mi" = 1e6, "bi" = 1e9, "tri" = 1e12)
 
 # -----------------------------------------------------------------------------
 #### Setting paths and files
@@ -74,19 +67,6 @@ stopifnot(
 )
 
 # -----------------------------------------------------------------------------
-#### Municipal mesh (for every map)
-# -----------------------------------------------------------------------------
-
-muni_mesh <- st_read(file.path(PATH_IBGE, FILE_MESH), quiet = TRUE) %>%
-  mutate(code_muni = as.character(as.integer(code_muni)))
-
-stopifnot(
-  "mesh: unexpected feature count" = nrow(muni_mesh) == N_MESH_FEATURES,
-  "mesh: some panel geocode has no polygon" =
-    length(setdiff(ranking$geocode_ibge, muni_mesh$code_muni)) == 0
-)
-
-# -----------------------------------------------------------------------------
 #### Shared palette, themes and quantile helper
 # -----------------------------------------------------------------------------
 
@@ -97,6 +77,11 @@ QUINTILE_PALETTE <- c("1" = "#f5f0e1", "2" = "#e8d9a8", "3" = "#d9ae6a",
 # the response, plum for the EGS. Hue is the only channel left to separate
 # them, since lightness already encodes the quintile. Cf. viz/01_maps.R.
 EGS_RAMP <- c("#d9b8cd", "#bd8fa9", "#996a86", "#734a64", "#4c2c42")
+# The third of the three ramps section 8 rule (4) declares. It lived inside
+# 01_maps.R while the other two lived here, and 05 copied two of its hexes
+# by hand, which made the pairing between figure 4 and figures 10 and 11
+# depend on someone having transcribed them right.
+RESPONSE_RAMP <- c("#9fb9dd", "#7c9bca", "#5c7cb0", "#405f92", "#26406e")
 
 # Gold, not the former ochre: brown is the deforestation ramp across the whole
 # suite, and an ochre gap line collided with ramp levels 3 and 4 (CIEDE2000
@@ -116,6 +101,10 @@ theme_chart <- theme_minimal(base_size = 12) +
   theme(panel.grid.minor = element_blank())
 
 q5 <- function(x) ntile(x, 5)
+
+# Written by hand in two scripts before: the top-20 outline on the maps and
+# the ring around the labelled points on figures 1 and 8 are one decision.
+OUTLINE_DARK <- "#1a3d2e"
 
 # -----------------------------------------------------------------------------
 #### EGS direction bands (figures 5 and 8 read the SAME column)
@@ -138,8 +127,15 @@ stopifnot(
               as.integer(N_TREND))
 )
 
-TREND_PALETTE <- c(worse_hi = "#a63d2f", worse = "#d19a8f",
-                   stable = "#ece9e0", better = "#7fb096",
+# Two measured corrections. worse_hi left #a63d2f, which is the exact hex of
+# absolute_gap in GAP_PALETTE: the same red meant "lacuna absoluta" on the
+# response map and "piorando muito" here, two unrelated quantities. The new
+# #8c2f39 sits 10,3 from it in CIEDE2000 and 35,9 from worse.
+# stable left #ece9e0, which was 6,3 from pure white and therefore read as
+# missing data on a map. #dcd5c2 is 12,3 from white and 9,1 from the grey,
+# still far lighter than either coloured side (22,9 and 22,0).
+TREND_PALETTE <- c(worse_hi = "#8c2f39", worse = "#d19a8f",
+                   stable = "#dcd5c2", better = "#7fb096",
                    better_hi = "#2e6e54",
                    no_recent_pressure = unname(GAP_PALETTE["no_pressure"]))
 TREND_LABELS  <- c(worse_hi = "piorando muito", worse = "piorando",
@@ -155,5 +151,4 @@ dir.create(PATH_OUT, showWarnings = FALSE, recursive = TRUE)
 
 message("setup ok, ranking: ", nrow(ranking),
         " | final: ", nrow(final),
-        " | annual: ", nrow(annual),
-        " | mesh: ", nrow(muni_mesh))
+        " | annual: ", nrow(annual))

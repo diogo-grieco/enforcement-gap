@@ -19,11 +19,41 @@ library(ggrepel)   # non-overlapping point labels
 #### 1: the EGS formula drawn
 # -----------------------------------------------------------------------------
 
+# One worked case per temporal shape. Santo Afonso (MT) is the sixth: 14
+# straight years above the materiality threshold, zero notices and zero reais
+# in all 18, then the deforestation stops and the series flatlines. Under the
+# old grey rule (n_years_pressure == 0) it would not have been grey, and its
+# difference of -0.491 would have put it in the STRONGEST improvement band.
 ANCHOR_NAMES <- c("Apuí", "Cumaru do Norte", "Cachoeira do Piriá",
-                  "Nova Nazaré", "Governador Luiz Rocha")
+                  "Nova Nazaré", "Governador Luiz Rocha", "Santo Afonso")
 
 FORMULA_FLOOR <- 1          # GREATEST(1, ...) in pipeline/03_analytics.sql
 EGS_RAYS      <- c(0.25, 0.5, 1)
+X_TICKS       <- c(0, 10, 100, 1000, 10000)
+
+# Figures 1 and 8 both drop a handful of names onto a dense point cloud. Size
+# and weight alone do not fix that: a bigger dark glyph on a busy field is
+# still a dark glyph on a busy field. What fixes it is a halo, which lifts the
+# letters off whatever is behind them while erasing far less than the opaque
+# plate a geom_label would paint. seed: ggrepel jitters AT DRAW TIME, so the
+# same plot object rendered twice differs byte-for-byte without it.
+# bg.color/bg.r need ggrepel >= 0.9.0. force_pull is raised above its
+# default of 1 because figures 1 and 8 both have anchors sitting in tight
+# pairs: with the default the labels drift far enough that the leader lines
+# cross and the reader cannot tell which name belongs to which point.
+repel_names <- function(data)
+  geom_text_repel(data = data, aes(label = municipality_name),
+                  size = 3.2, fontface = "bold", colour = "grey15",
+                  bg.color = "white", bg.r = 0.16,
+                  min.segment.length = 0, box.padding = 0.8,
+                  point.padding = 0.5, force = 5, force_pull = 2.5,
+                  max.overlaps = Inf,
+                  segment.colour = "grey40", segment.size = 0.3, seed = 42)
+
+# A ring so the reader can tell which point each name belongs to.
+ring_points <- function(data)
+  geom_point(data = data, shape = 21, fill = NA, colour = OUTLINE_DARK,
+             stroke = 0.8, size = 2.8)
 
 PUB_N_ZERO_DEFOR <- 133     # dropped: no pressure in 18 years
 PUB_N_AT_FLOOR   <- 106     # of the 639 drawn, response at the formula floor
@@ -57,7 +87,7 @@ stopifnot(
 )
 
 anchors <- formula_df %>% filter(municipality_name %in% ANCHOR_NAMES)
-stopifnot("anchors: expected 5 anchor cases" =
+stopifnot("anchors: some anchor is missing from the drawn set" =
             nrow(anchors) == length(ANCHOR_NAMES))
 
 X_MAX <- ceiling(max(formula_df$numerador_18y) * 10) / 10
@@ -81,10 +111,15 @@ p_scatter <- ggplot(formula_df, aes(x = numerador_18y, y = denominador_18y)) +
              size = 2.8, label.padding = unit(0.12, "lines")) +
   scale_fill_manual(values = GAP_PALETTE, labels = GAP_LABELS,
                     name = "Tipo dominante") +
-  scale_x_continuous(breaks = 0:4,
-                     labels = number(10^(0:4) - 1, accuracy = 1)) +
-  geom_text_repel(data = anchors, aes(label = municipality_name),
-                  size = 3, min.segment.length = 0, seed = 42) +
+  # Round decades on the tick, not 10^k - 1: the axis is log10(1 + area), so
+  # the break sits at the true position of 10, 100, 1.000 km2. Breaks beyond
+  # the data range are dropped by ggplot.
+  scale_x_continuous(breaks = log10(1 + X_TICKS),
+                     labels = number(X_TICKS, accuracy = 1)) +
+  # The anchors get a dark ring so the reader can tell which point each label
+  # belongs to; the repel is loosened so the labels stop landing on the cloud.
+  ring_points(anchors) +
+  repel_names(anchors) +
   labs(x = "Numerador: km² desmatados",
        y = "Denominador: autos × multas (média geométrica)") +
   theme_chart +
@@ -93,6 +128,12 @@ p_scatter <- ggplot(formula_df, aes(x = numerador_18y, y = denominador_18y)) +
 # -----------------------------------------------------------------------------
 #### 8: historical x recent quadrant
 # -----------------------------------------------------------------------------
+
+# The labelled points are the same six anchors as figures 1 and 9. The old
+# rule was the top 8 by avg_egs_18y, which is a coordinate of the x axis, so
+# every name landed in the same corner and none of them was an extreme of the
+# quantity this figure is about. The anchors spread across the panel and name
+# a case in five of the six bands.
 
 p_quadrant <- ggplot(ranking, aes(x = avg_egs_18y, y = avg_egs_3y)) +
   geom_abline(slope = 1, intercept = 0, linetype = "dashed",
@@ -103,11 +144,10 @@ p_quadrant <- ggplot(ranking, aes(x = avg_egs_18y, y = avg_egs_3y)) +
                     name = NULL) +
   scale_x_continuous(labels = number) +
   scale_y_continuous(labels = number) +
-  geom_text_repel(data = ranking %>% slice_max(avg_egs_18y, n = 8),
-                  aes(label = municipality_name), size = 3,
-                  min.segment.length = 0, seed = 42) +   # seed: see item 1
-  labs(x = "EGS médio histórico (2008–2025)",
-       y = "EGS médio recente (2023–2025)") +
+  ring_points(anchors) +
+  repel_names(anchors) +
+  labs(x = "EGS médio histórico (2008-2025)",
+       y = "EGS médio recente (2023-2025)") +
   theme_chart
 
 # -----------------------------------------------------------------------------
@@ -118,9 +158,26 @@ anchor_series <- final %>%
   filter(municipality_name %in% ANCHOR_NAMES) %>%
   mutate(municipality_name = factor(municipality_name, levels = ANCHOR_NAMES))
 
+# The ordering criterion of the ranking, drawn on the series it summarises.
+# Read straight from the parquet, not refitted here. The 2023-2025 mean was
+# tried and removed: over its own three-year window it lands among the very
+# points it averages, so the segment sat on top of the line. The slope stays
+# out too: it is a rate, not a level, and does not share this axis.
+anchor_mean <- ranking %>%
+  filter(municipality_name %in% ANCHOR_NAMES) %>%
+  transmute(municipality_name = factor(municipality_name,
+                                       levels = ANCHOR_NAMES), avg_egs_18y)
+
+stopifnot("anchor mean: expected one row per anchor" =
+            nrow(anchor_mean) == length(ANCHOR_NAMES))
+
 p_anchors <- ggplot(anchor_series, aes(x = year, y = egs)) +
-  geom_line(colour = "#2e6e54", linewidth = 0.8) +
-  geom_point(colour = "#2e6e54", size = 1) +
+  geom_hline(data = anchor_mean, aes(yintercept = avg_egs_18y),
+             colour = "grey45", linetype = "dashed", linewidth = 0.5) +
+  # Plum, the suite's ramp for the EGS: this panel plots the EGS. The green
+  # it used before was the exact hex of "melhorando muito" in TREND_PALETTE.
+  geom_line(colour = EGS_RAMP[5], linewidth = 0.8) +
+  geom_point(colour = EGS_RAMP[5], size = 1) +
   # 3 + 2 panels: the compact block fits the report's text width without
   # shrinking the labels, which the single 12-inch strip did (text rendered at
   # about 52% of the intended size).

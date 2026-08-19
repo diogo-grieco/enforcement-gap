@@ -13,6 +13,22 @@
 # =============================================================================
 
 source("viz/00_setup.R")
+library(sf)   # the only script that needs it
+
+# -----------------------------------------------------------------------------
+#### Municipal mesh
+# -----------------------------------------------------------------------------
+# Read here and not in 00_setup.R: 2,7 MB of GeoJSON and 772 polygons that
+# only this script uses.
+
+muni_mesh <- st_read(file.path(PATH_IBGE, FILE_MESH), quiet = TRUE) %>%
+  mutate(code_muni = as.character(as.integer(code_muni)))
+
+stopifnot(
+  "mesh: unexpected feature count" = nrow(muni_mesh) == N_MESH_FEATURES,
+  "mesh: some panel geocode has no polygon" =
+    length(setdiff(ranking$geocode_ibge, muni_mesh$code_muni)) == 0
+)
 
 # -----------------------------------------------------------------------------
 #### Join ranking onto the mesh (by geocode, never by name)
@@ -98,7 +114,7 @@ stopifnot("top20: expected TOP_N shapes" = nrow(top20_shapes) == TOP_N)
 outline_layer <- list(
   geom_sf(data = top20_shapes, fill = NA, colour = "#ffffff",
           linewidth = 1.1, inherit.aes = FALSE),
-  geom_sf(data = top20_shapes, fill = NA, colour = "#1a3d2e",
+  geom_sf(data = top20_shapes, fill = NA, colour = OUTLINE_DARK,
           linewidth = 0.5, inherit.aes = FALSE)
 )
 
@@ -154,15 +170,14 @@ stopifnot(
 )
 
 RESPONSE_PALETTE <- c(none = CAT_NONE, gap = CAT_GAP,
-                      "1" = "#9fb9dd", "2" = "#7c9bca", "3" = "#5c7cb0",
-                      "4" = "#405f92", "5" = "#26406e")
+                      setNames(RESPONSE_RAMP, as.character(1:5)))
 RESPONSE_LABELS  <- c(none = "sem pressão", gap = "com pressão, sem multa",
                       "1" = "1", "2" = "2", "3" = "3", "4" = "4", "5" = "5")
 
 m_response <- ggplot(map_data) +
   geom_sf(aes(fill = q_response), colour = "white", linewidth = 0.05) +
   scale_fill_manual(values = RESPONSE_PALETTE, labels = RESPONSE_LABELS,
-                    name = "Quintil da resposta federal\n(autos x multas)") +
+                    name = "Quintil da resposta federal\n(autos \u00d7 multas)") +
   state_layer +
   outline_layer +
   theme_map
@@ -186,7 +201,7 @@ m_egs <- ggplot(map_data) +
 m_egs_trend <- ggplot(map_data) +
   geom_sf(aes(fill = egs_trend), colour = "white", linewidth = 0.05) +
   scale_fill_manual(values = TREND_PALETTE, labels = TREND_LABELS,
-                    name = "EGS recente (2023–2025)\ncontra o histórico") +
+                    name = "EGS recente (2023-2025)\ncontra o histórico") +
   state_layer +
   outline_layer +
   theme_map

@@ -29,7 +29,7 @@ project2/
 ├── exploration/                (validação paralela em R, roda direto sobre os CSVs brutos)
 │   └── exploring_script.R
 ├── viz/                         (suíte de visualização; ver viz/README.md)
-│   ├── 00_setup.R, prep_mesh.R, 01_maps.R … 05_panel_effects.R
+│   ├── 00_setup.R, prep_mesh.R, 01_maps.R … 04_panel_effects.R
 │   └── README.md
 ├── deliverables/
 │   ├── EGMS_01_resumo_executivo.docx
