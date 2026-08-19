@@ -12,7 +12,7 @@
 --
 ------------------------------------------------------------
 -- CONFIGURATION
--- Edit this line to your local project clone path before running. 
+-- Edit this line to your local project clone path before running.
 ------------------------------------------------------------
 
 SET VARIABLE data_root = 'C:/Users/diogo/projects/project2';
@@ -39,7 +39,7 @@ SELECT * FROM read_csv(
 -- ibama_raw
 -- Source: IBAMA open data (manual download, 1 csv/year). Public
 --         release: 13 of 84 raw columns, NOME_INFRATOR dropped, and
---         CPF_CNPJ_INFRATOR replaced by a random surrogate id (pid_); 
+--         CPF_CNPJ_INFRATOR replaced by a random surrogate id (pid_);
 --         cf. data/data_ibama_public/README.md
 -- Granularity: infraction notice | Expected: 309,116 x 13
 ----------------------------------------------------------
@@ -88,7 +88,7 @@ SELECT * FROM read_json_auto(getvariable('data_root') || '/data/data_ibge/munici
 -- municipality_area_raw
 -- Source: IBGE, Malha Municipal Digital: Áreas Territoriais, file
 --         AR_BR_RG_UF_RGINT_RGI_MUN_2025.xls, downloaded 2026-07-20.
--- The source is a legacy .xls; converted once to CSV 
+-- The source is a legacy .xls; converted once to CSV
 -- Expected: 5,575 rows (5,573 municipalities + 2 garbage rows).
 ----------------------------------------------------------
 
@@ -119,4 +119,4 @@ WITH checks AS (
 SELECT check_name, actual, expected,
        CASE WHEN actual = expected THEN 'OK' ELSE 'failed' END AS status
 FROM checks
-ORDER BY status DESC, check_name; 
+ORDER BY status DESC, check_name;   -- 'failed' > 'OK' na colação binária: falhas no topo

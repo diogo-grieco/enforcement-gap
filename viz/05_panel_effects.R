@@ -5,10 +5,10 @@
 #
 # Author: Diogo Grieco
 #
-# Purpose: The panel-regression findings, in fixest (report figures 11
-#          and 12).
-#            11 coefficient plot summarising the five two-way FE models
-#            12 event study around a deforestation surge, with placebo
+# Purpose: The panel-regression findings, in fixest (report figures 10
+#          and 11).
+#            10 coefficient plot summarising the five two-way FE models
+#            11 event study around a deforestation surge, with placebo
 #               pre-period
 #          Municipality + year FE, municipality-clustered SEs: the estimator
 #          the dissertation proposes, and the one the Python pilot used.

@@ -109,7 +109,8 @@ Todos os `read_csv`/`read_json_auto` do pipeline usam `getvariable('data_root') 
                         municipality_ref, municipality_area, ipca_annual)
    03_analytics.sql  → índices derivados: deflator IPCA, EGS unificado (fórmula única
                         com piso no denominador), egs_ranking (média 0-fill 18 anos,
-                        média 3 anos, slope, pct_desmatado), annual_summary
+                        média 3 anos, slope, pct_desmatado, os dois termos da fórmula
+                        agregados e a classificação de direção), annual_summary
    04_export.sql     → materializa 3 parquets em output/parquets/
    ```
 5. Confira os checks: cada arquivo termina em uma única query consolidada que retorna `check_name | actual | expected | status` (56 checks no total, entre os 4 arquivos; falhas aparecem no topo do grid). Qualquer linha com `status = failed` deve ser investigada antes de prosseguir, ver a nota de reprodutibilidade acima antes de assumir que é um bug. A pasta `output/parquets/` precisa existir antes de rodar o `04` (o `COPY` não cria diretórios).
@@ -132,7 +133,7 @@ Os valores esperados nos blocos de check (`01_n_ibama_clean = 60707`, `06_total_
 
 Antes de comparar um check `failed` com o pipeline, confirme se algum dos 5 arquivos foi rebaixado depois dessas datas. Se sim, o esperado do check é o que precisa ser atualizado, não o SQL.
 
-O mesmo contrato vale para a suíte `viz/`: os números que os relatórios publicam e que nascem na camada R (contagens das bandas de direção do EGS, coeficientes de painel e do event study) estão fixados como constantes `PUB_*` ou `N_*` no script que os produz, asseridas com `stopifnot()` logo abaixo do cálculo. Se um deles falhar depois de rebaixar dados, o que precisa mudar é o esperado e o texto que o publica, não o código. `grep "^PUB_" viz/*.R` lista o inventário completo.
+O mesmo contrato vale para a suíte `viz/`: os números que os relatórios publicam e que nascem na camada R (coeficientes de painel e do event study; as contagens das bandas de direção nascem no SQL e o R apenas as confere) estão fixados como constantes `PUB_*` ou `N_*` no script que os produz, asseridas com `stopifnot()` logo abaixo do cálculo. Se um deles falhar depois de rebaixar dados, o que precisa mudar é o esperado e o texto que o publica, não o código. `grep "^PUB_" viz/*.R` lista o inventário completo.
 
 ---
 

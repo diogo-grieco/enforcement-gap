@@ -34,6 +34,16 @@
 --     i.year) compares PRODES's official year (Aug 1, year t-1 to
 --     Jul 31, year t) against IBAMA's calendar year (Jan-Dec). They
 --     overlap for only ~7 of 12 months.
+-- (j) EGS_TREND: direction of travel, avg_egs_3y against avg_egs_18y,
+--     with a stable band at |difference| < 0.05 and a strong band at
+--     >= 0.20. Classified here and not in the figures that draw it:
+--     the bands are a methodological choice, and two figures read the
+--     same column. The grey band is avg_egs_3y = 0, NOT
+--     n_years_pressure = 0: the 0-fill zeroes the recent mean of a
+--     municipality whose pressure stopped, which makes the difference
+--     negative, and a direction needs pressure at both ends of the
+--     window. Thresholds apply to the ROUNDED columns above, so the
+--     band is decided on the value the parquet stores.
 ----------------------------------------------------------
 
 ----------------------------------------------------------
@@ -136,7 +146,20 @@ SELECT
     a.area_municipio_km2,
     ROUND(SUM(e.area_km2) / a.area_municipio_km2 * 100, 2)        AS pct_desmatado,
     SUM(e.n_infractions)                                          AS n_infractions,
-    ROUND(SUM(e.fine_values), 2)                                  AS total_fines
+    ROUND(SUM(e.fine_values), 2)                                  AS total_fines,
+    ROUND(LOG(1 + total_desmatado_km2), 4)                        AS numerador_18y,
+    -- SUM spelled out: the alias n_infractions collides with e.n_infractions,
+    -- and the source column wins, which leaves it outside the GROUP BY.
+    ROUND(GREATEST(1, SQRT(LOG(1 + SUM(e.n_infractions))
+                         * LOG(1 + total_fines))), 4)             AS denominador_18y,
+    CASE
+        WHEN avg_egs_3y = 0                            THEN 'no_recent_pressure'
+        WHEN ABS(avg_egs_3y - avg_egs_18y) < 0.05      THEN 'stable'
+        WHEN avg_egs_3y - avg_egs_18y <= -0.20         THEN 'better_hi'
+        WHEN avg_egs_3y < avg_egs_18y                  THEN 'better'
+        WHEN avg_egs_3y - avg_egs_18y >= 0.20          THEN 'worse_hi'
+        ELSE                                                'worse'
+    END                                                           AS egs_trend
 FROM project2.analytics.egs_final e
 LEFT JOIN project2.marts.municipality_area a
     ON e.geocode_ibge = a.geocode_ibge

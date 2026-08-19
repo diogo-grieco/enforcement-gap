@@ -6,10 +6,10 @@
 # Author: Diogo Grieco
 #
 # Purpose: Non-spatial panels on the municipality-grain ranking (report
-#          figures 7, 8 and 14).
-#            7   the EGS formula drawn: its numerator against its denominator
-#            8   historical x recent quadrant (avg_egs_18y vs avg_egs_3y)
-#            14  small multiples: annual EGS of the 5 anchor cases
+#          figures 1, 8 and 9).
+#            1  the EGS formula drawn: numerator against denominator
+#            8  historical x recent quadrant (avg_egs_18y vs avg_egs_3y)
+#            9  small multiples: annual EGS of the 5 anchor cases
 # =============================================================================
 
 source("viz/00_setup.R")
@@ -31,11 +31,7 @@ PUB_SPEARMAN_AGG <- 0.503   # this figure's ratio vs. the published
                             # avg_egs_18y, over the municipalities DRAWN
 
 formula_df <- ranking %>%
-  mutate(numerator   = log10(1 + total_desmatado_km2),
-         denominator = pmax(FORMULA_FLOOR,
-                            sqrt(log10(1 + n_infractions) *
-                                   log10(1 + total_fines))),
-         dominant = factor(case_when(
+  mutate(dominant = factor(case_when(
            n_absolute_gap >= n_measured_gap &
              n_absolute_gap >= n_no_pressure ~ "absolute_gap",
            n_measured_gap >= n_no_pressure   ~ "measured_gap",
@@ -53,9 +49,9 @@ stopifnot(
   "formula plot: drawn count changed" =
     nrow(formula_df) == N_MUNI - PUB_N_ZERO_DEFOR,
   "formula plot: floor count changed" =
-    sum(formula_df$denominator == FORMULA_FLOOR) == PUB_N_AT_FLOOR,
+    sum(formula_df$denominador_18y == FORMULA_FLOOR) == PUB_N_AT_FLOOR,
   "formula plot: aggregate-vs-index rank correlation changed" =
-    round(cor(formula_df$numerator / formula_df$denominator,
+    round(cor(formula_df$numerador_18y / formula_df$denominador_18y,
               formula_df$avg_egs_18y, method = "spearman"), 3) ==
       PUB_SPEARMAN_AGG
 )
@@ -64,15 +60,15 @@ anchors <- formula_df %>% filter(municipality_name %in% ANCHOR_NAMES)
 stopifnot("anchors: expected 5 anchor cases" =
             nrow(anchors) == length(ANCHOR_NAMES))
 
-X_MAX <- ceiling(max(formula_df$numerator) * 10) / 10
-Y_MAX <- ceiling(max(formula_df$denominator) * 10) / 10
+X_MAX <- ceiling(max(formula_df$numerador_18y) * 10) / 10
+Y_MAX <- ceiling(max(formula_df$denominador_18y) * 10) / 10
 ray_labels <- data.frame(
   egs   = EGS_RAYS,
   x     = 0.88 * pmin(X_MAX, Y_MAX * EGS_RAYS),
   y     = 0.88 * pmin(Y_MAX, X_MAX / EGS_RAYS),
   label = paste("EGS", sub("\\.", ",", as.character(EGS_RAYS))))
 
-p_scatter <- ggplot(formula_df, aes(x = numerator, y = denominator)) +
+p_scatter <- ggplot(formula_df, aes(x = numerador_18y, y = denominador_18y)) +
   geom_abline(slope = 1 / EGS_RAYS, intercept = 0, linetype = "dashed",
               colour = "grey65") +
   geom_hline(yintercept = FORMULA_FLOOR, colour = "grey75", linewidth = 0.3) +
@@ -109,7 +105,7 @@ p_quadrant <- ggplot(ranking, aes(x = avg_egs_18y, y = avg_egs_3y)) +
   scale_y_continuous(labels = number) +
   geom_text_repel(data = ranking %>% slice_max(avg_egs_18y, n = 8),
                   aes(label = municipality_name), size = 3,
-                  min.segment.length = 0, seed = 42) +   # seed: see item 7
+                  min.segment.length = 0, seed = 42) +   # seed: see item 1
   labs(x = "EGS médio histórico (2008–2025)",
        y = "EGS médio recente (2023–2025)") +
   theme_chart

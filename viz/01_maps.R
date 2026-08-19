@@ -5,9 +5,11 @@
 #
 # Author: Diogo Grieco
 #
-# Purpose: Static maps (report figures 1 to 5), in the order that builds the
-#          index: numerator, numerator normalised, denominator, ratio,
-#          direction. All rank-quintiles over the SAME 552 municipalities.
+# Purpose: The five choropleths (report figures 2 to 5 and 7). Written in the
+#          order that builds the index: numerator, numerator normalised,
+#          denominator, ratio, direction. The report interleaves them with the
+#          other figures, so their numbers are not contiguous. All
+#          rank-quintiles over the SAME 552 municipalities.
 # =============================================================================
 
 source("viz/00_setup.R")
@@ -133,7 +135,7 @@ N_FINED       <- 486
 
 map_data <- map_data %>%
   mutate(
-    response   = sqrt(log10(1 + n_infractions) * log10(1 + total_fines)),
+    response   = denominador_18y,
     q_response = factor(case_when(
       !has_pressure    ~ "none",
       total_fines == 0 ~ "gap",
@@ -148,12 +150,7 @@ stopifnot(
   "q_response: fined count changed" =
     sum(map_data$q_response %in% as.character(1:5)) == N_FINED,
   "q_response: the grey is no longer the shared no-pressure set" =
-    identical(map_data$q_response == "none", !map_data$has_pressure),
-  "response: the geometric mean is no longer count-dominated" =
-    round(cor(rank(map_data$response[map_data$q_response %in%
-                                     as.character(1:5)]),
-              rank(map_data$n_infractions[map_data$q_response %in%
-                                            as.character(1:5)])), 3) == 0.993
+    identical(map_data$q_response == "none", !map_data$has_pressure)
 )
 
 RESPONSE_PALETTE <- c(none = CAT_NONE, gap = CAT_GAP,

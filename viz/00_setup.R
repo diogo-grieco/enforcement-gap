@@ -6,8 +6,8 @@
 #
 # Purpose: Shared entry point for every viz script: packages, paths, integrity
 #          checkpoints, the three parquet feeds and the mesh (with stopifnot
-#          guards), the raw IBAMA loader, and the shared palette, themes and
-#          quantile helper. Sourced by each downstream script, never run alone.
+#          guards), the EGS direction bands, and the shared palette, themes
+#          and quantile helper. Sourced by each script, never run alone.
 #          Run with the working directory at the PROJECT ROOT (project2.Rproj).
 # =============================================================================
 
@@ -38,9 +38,9 @@ cut_br_scale <- function()
 # -----------------------------------------------------------------------------
 
 PATH_PARQUETS   <- "output/parquets"
-FILE_RANKING    <- "egs_ranking.parquet"      
-FILE_FINAL      <- "egs_final.parquet"        
-FILE_ANNUAL     <- "annual_summary.parquet"   
+FILE_RANKING    <- "egs_ranking.parquet"
+FILE_FINAL      <- "egs_final.parquet"
+FILE_ANNUAL     <- "annual_summary.parquet"
 
 PATH_IBGE       <- "data/data_ibge"
 FILE_MESH       <- "malha_772_amazonia_legal_simplificada.geojson"
@@ -51,10 +51,10 @@ PATH_OUT        <- "output/visualizations"
 #### Data integrity checkpoints
 # -----------------------------------------------------------------------------
 
-N_MUNI               <- 772      
-N_PANEL              <- 13896    
-N_YEARS              <- 18       
-N_MESH_FEATURES      <- 772      
+N_MUNI               <- 772
+N_PANEL              <- 13896
+N_YEARS              <- 18
+N_MESH_FEATURES      <- 772
 
 # -----------------------------------------------------------------------------
 #### Loading the feeds (with stopifnot guards)
@@ -118,41 +118,24 @@ theme_chart <- theme_minimal(base_size = 12) +
 q5 <- function(x) ntile(x, 5)
 
 # -----------------------------------------------------------------------------
-#### EGS direction bands (figures 5 and 8 read the SAME classification)
+#### EGS direction bands (figures 5 and 8 read the SAME column)
 # -----------------------------------------------------------------------------
-# One definition, read by both figures, which encode the same quantity in
-# different supports and used to classify it separately.
-#
-# The grey is avg_egs_3y == 0, not n_years_pressure == 0: a municipality whose
-# pressure stopped has a recent mean of zero by 0-fill, so the difference is
-# negative and the old rule called it improving. A direction needs pressure at
-# both ends of the window. 220 of the 381 never had pressure; 161 lost it.
+# egs_trend is computed in pipeline/03_analytics.sql, beside the definition of
+# the index it derives from. Here it only gets its level order, which drives
+# the legend, and a count check that the feed is the expected vintage.
 
-TREND_STABLE <- 0.05
-TREND_STRONG <- 0.20
-
-ranking <- ranking %>%
-  mutate(egs_trend = factor(case_when(
-    avg_egs_3y == 0                          ~ "no_recent_pressure",
-    abs(avg_egs_3y - avg_egs_18y) <
-      TREND_STABLE                           ~ "stable",
-    avg_egs_3y - avg_egs_18y <= -TREND_STRONG ~ "better_hi",
-    avg_egs_3y < avg_egs_18y                 ~ "better",
-    avg_egs_3y - avg_egs_18y >= TREND_STRONG ~ "worse_hi",
-    TRUE                                     ~ "worse"),
-    levels = c("worse_hi", "worse", "stable", "better", "better_hi",
-               "no_recent_pressure")))
-
+TREND_LEVELS <- c("worse_hi", "worse", "stable", "better", "better_hi",
+                  "no_recent_pressure")
 N_TREND <- c(worse_hi = 35, worse = 72, stable = 83, better = 126,
              better_hi = 75, no_recent_pressure = 381)
 
+ranking <- ranking %>%
+  mutate(egs_trend = factor(egs_trend, levels = TREND_LEVELS))
+
 stopifnot(
-  "egs_trend: published band counts changed" =
+  "egs_trend: band counts changed" =
     identical(as.integer(table(ranking$egs_trend)[names(N_TREND)]),
-              as.integer(N_TREND)),
-  "egs_trend: the grey band is not the zero-recent-EGS set" =
-    identical(ranking$egs_trend == "no_recent_pressure",
-              ranking$avg_egs_3y == 0)
+              as.integer(N_TREND))
 )
 
 TREND_PALETTE <- c(worse_hi = "#a63d2f", worse = "#d19a8f",

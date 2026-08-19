@@ -22,6 +22,7 @@
 # -----------------------------------------------------------------------------
 
 library(tidyverse)
+library(sf)        # III.6 only: the municipal mesh
 
 # -----------------------------------------------------------------------------
 #### Setting paths and files
@@ -33,6 +34,8 @@ PATH_PRODES   <- "data/data_prodes"
 FILE_PRODES   <- "terrabrasilis_legal_amazon_25_04_2026_1777126839450.csv"
 PATH_IPCA     <- "data/data_ipca"
 FILE_IPCA     <- "sidra_1737_v2266_ipca_indice_200801_202512_2026_07_10.csv"
+PATH_IBGE     <- "data/data_ibge"
+FILE_MESH     <- "malha_772_amazonia_legal_simplificada.geojson"
 
 # -----------------------------------------------------------------------------
 #### Data integrity checkpoints
@@ -61,6 +64,10 @@ N_MEASURED_GAP           <- 3285
 N_FLOOR_ACTIVE           <- 28
 N_RECLASS_MATERIALITY    <- 3291
 N_MUNI_WITH_PRESSURE     <- 552
+N_TREND                  <- c(worse_hi = 35, worse = 72, stable = 83,
+                              better = 126, better_hi = 75,
+                              no_recent_pressure = 381)
+N_WORSE_PATCHES          <- 29
 
 # DESCRIPTION ONLY (no counterpart in the SQL pipeline)
 NROW_IBAMA_LAG_BASE      <- 17642
@@ -408,7 +415,22 @@ muni_current <- egs_panel %>%
 
 final_table <- muni_ranking %>%
   left_join(muni_current, by = c("geocode_ibge", "mun")) %>%
-  arrange(desc(avg_egs_18y))
+  arrange(desc(avg_egs_18y)) %>%
+  mutate(d18 = round(avg_egs_18y, 3),
+         d3  = round(avg_egs_3y, 3),
+         egs_trend = case_when(d3 == 0              ~ "no_recent_pressure",
+                               abs(d3 - d18) < 0.05 ~ "stable",
+                               d3 - d18 <= -0.20    ~ "better_hi",
+                               d3 < d18             ~ "better",
+                               d3 - d18 >=  0.20    ~ "worse_hi",
+                               TRUE                 ~ "worse")) %>%
+  select(-d18, -d3)
+
+stopifnot(
+  "final_table: trend band counts changed" =
+    identical(as.integer(table(final_table$egs_trend)[names(N_TREND)]),
+              as.integer(N_TREND))
+)
 
 
 # #############################################################################
@@ -752,3 +774,66 @@ muni_qualified %>%
 final_table %>%
   filter(mun %in% c("Palmeiras do Tocantins", "Nova Nazaré")) %>%
   select(mun, avg_egs_18y, avg_egs_3y, slope_egs, n_years_pressure)
+
+# =============================================================================
+#### III.6 Contiguity of the worsening set   (extended report 4.4.2 and 4.4.3)
+# =============================================================================
+
+# Contiguity is QUEEN
+# Expected: 29 patches
+#   patch 1  35 (MT 34, RO 1): median 79 notices, R$ 157,7 mi median fines,
+#            R$ 7,14 bi total, none never fined
+#   patch 2  24 (AM 23, RR 1): median 2 notices, R$ 116 mi total, 6 never fined
+#   improving neighbours 33 (MT 21, RO 6, PA 3, AM 2, TO 1): median 46
+#            notices, R$ 38,1 mi median fines
+
+UF <- c("11" = "RO", "13" = "AM", "14" = "RR", "15" = "PA",
+        "16" = "AP", "17" = "TO", "21" = "MA", "51" = "MT")
+
+components <- function(nb) {
+  comp <- rep(NA_integer_, length(nb)); k <- 0L
+  while (anyNA(comp)) {
+    k <- k + 1L; frontier <- which(is.na(comp))[1]
+    while (length(frontier)) {
+      comp[frontier] <- k
+      frontier <- setdiff(unique(unlist(nb[frontier])), which(!is.na(comp)))
+    }
+  }
+  comp
+}
+
+mesh <- st_read(file.path(PATH_IBGE, FILE_MESH), quiet = TRUE) %>%
+  transmute(geocode_ibge = as.character(as.integer(code_muni))) %>%
+  inner_join(final_table %>% select(geocode_ibge, egs_trend),
+             by = "geocode_ibge")
+
+worse       <- mesh %>% filter(egs_trend %in% c("worse_hi", "worse"))
+worse$patch <- components(st_intersects(worse))
+better      <- mesh %>% filter(egs_trend %in% c("better_hi", "better"))
+
+# by size, so the printed label does not depend on the mesh's row order
+top2 <- as.integer(names(sort(table(worse$patch), decreasing = TRUE)))[1:2]
+
+stopifnot(
+  "contiguity: patch count changed" =
+    n_distinct(worse$patch) == N_WORSE_PATCHES
+)
+
+# 4.4.2's comparison: same margin, opposite sign, touching the largest patch.
+groups <- bind_rows(
+  worse %>% st_drop_geometry() %>% filter(patch %in% top2) %>%
+    transmute(geocode_ibge, group = paste("patch", match(patch, top2))),
+  tibble(group = "improving neighbours",
+         geocode_ibge = better$geocode_ibge[lengths(st_intersects(
+           better, filter(worse, patch == top2[1]))) > 0]))
+
+final_table %>%
+  inner_join(groups, by = "geocode_ibge") %>%
+  group_by(group) %>%
+  summarise(n = n(),
+            ufs = {t <- sort(table(UF[substr(geocode_ibge, 1, 2)]), TRUE)
+                   paste(names(t), t, collapse = " ")},
+            notices     = median(n_infractions),
+            fines_mi    = round(median(total_fines) / 1e6, 1),
+            total_bn    = round(sum(total_fines) / 1e9, 2),
+            never_fined = sum(total_fines == 0), .groups = "drop")
