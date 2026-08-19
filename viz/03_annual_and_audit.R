@@ -41,9 +41,6 @@ defor_series <- annual %>%
   transmute(year, value = total_deforested_km2,
             panel = factor(PANEL_DEFOR, levels = PANELS))
 
-# free_y shares one scale spec, and breaks_pretty gave the bar panel three
-# ticks, leaving the tallest bars with nothing to be read against. Braces are
-# load-bearing: a bare else on the next line is a parse error in R.
 breaks_by_panel <- function(limits) {
   if (max(limits) > 1000) scales::breaks_width(2500)(limits)
   else                    scales::breaks_width(100)(limits)

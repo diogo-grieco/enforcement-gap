@@ -16,9 +16,7 @@
 library(tidyverse)
 library(arrow)
 library(scales)
-# sf is NOT loaded here: it links GDAL, GEOS and PROJ, and only 01 needs it.
 
-# pt-BR decimal mark on every axis label. Shadows the scales:: name.
 number <- function(x, ...)
   scales::number(x, decimal.mark = ",", big.mark = ".", ...)
 
@@ -90,13 +88,11 @@ theme_chart <- theme_minimal(base_size = 12) +
 
 q5 <- function(x) ntile(x, 5)
 
-# Top-20 outline on the maps and ring on the labelled points: one decision.
 OUTLINE_DARK <- "#1a3d2e"
 
 # -----------------------------------------------------------------------------
-#### EGS direction bands (figures 5 and 8 read the SAME column)
+#### EGS direction bands (figures 7 and 8 read the SAME column)
 # -----------------------------------------------------------------------------
-# Computed in pipeline/03_analytics.sql. Here: level order, vintage check.
 
 TREND_LEVELS <- c("worse_hi", "worse", "stable", "better", "better_hi",
                   "no_recent_pressure")
@@ -112,8 +108,6 @@ stopifnot(
               as.integer(N_TREND))
 )
 
-# worse_hi must not reuse absolute_gap's hex; stable must not sit next to
-# white, or a map reads it as missing data. Distances measured, see CHANGELOG.
 TREND_PALETTE <- c(worse_hi = "#8c2f39", worse = "#d19a8f",
                    stable = "#dcd5c2", better = "#7fb096",
                    better_hi = "#2e6e54",

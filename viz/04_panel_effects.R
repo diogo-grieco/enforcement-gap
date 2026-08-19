@@ -11,15 +11,13 @@
 # The one script in the suite that estimates before it draws: DuckDB has no
 # fixed-effects estimator, so this cannot move upstream like gap_type,
 # egs_trend or gap_dominant did. Declared exception; see viz/README.md.
-# The PUB_* constants below are what replaces layer purity here.
 # =============================================================================
 
 source("viz/00_setup.R")
 library(fixest)
 
-# Read by figures 10 and 11. Lightness, not hue: it survives colour blindness.
-OUTCOME_COLOURS <- c(autos  = unname(RESPONSE_RAMP[1]),
-                     multas = unname(RESPONSE_RAMP[5]))
+OUTCOME_COLOURS <- c(autos  = unname(RESPONSE_RAMP[5]),
+                     multas = unname(RESPONSE_RAMP[1]))
 
 # -----------------------------------------------------------------------------
 #### Build the panel with lags/leads WITHIN municipality
@@ -61,8 +59,6 @@ m4 <- feols(log_infra_f1 ~ d_pos + d_neg + log_area + log_area_f1 |
               geocode_ibge + year,
             data = panel, cluster = ~geocode_ibge)                 # asymmetry
 
-# Same specifications with the FINE as outcome. The two responses diverge:
-# rank correlation 0.722 at the annual grain, not 0.99.
 m1f <- feols(log_fine ~ log_area + log_area_l1 | geocode_ibge + year,
              data = panel, cluster = ~geocode_ibge)              # level, fines
 m2f <- feols(log_fine_f1 ~ d_log_area + log_area | geocode_ibge + year,
@@ -73,8 +69,6 @@ m4f <- feols(log_fine_f1 ~ d_pos + d_neg + log_area + log_area_f1 |
 
 etable(m1, m1f, m2, m2f, m3, m4, m4f)   # full tables for the write-up
 
-# Values PUBLISHED in section 5.5, at the precision the text uses. Compared on
-# the ROUNDED value: what is protected is the sentence, not the coefficient.
 PUB_M1_LOG_AREA    <-  0.080 ; PUB_M1_LOG_AREA_L1 <- 0.056
 PUB_M2_D_LOG_AREA  <- -0.057
 PUB_M2F_D_LOG_AREA <- -0.399
@@ -135,9 +129,7 @@ grab <- function(model, term, label, outcome) {
              estimate = ct[term, "Estimate"],
              se       = ct[term, "Std. Error"], row.names = NULL)
 }
-# m3 is estimated and checked above but not plotted: it backs one sentence in
-# the report, and d_log_area is autocorrelated enough to make a t+2 row cheap.
-# Every row is a term of DEFORESTATION; the response is the colour.
+
 ROWS <- c("Nível em t\n(resposta em t)",
           "Nível em t-1\n(resposta em t)",
           "Variação anual em t\n(resposta em t+1)",
@@ -162,8 +154,6 @@ coef_df <- bind_rows(
          label   = factor(label, levels = rev(ROWS)),
          outcome = factor(outcome, levels = c(AUTOS, MULTAS)))
 
-# Shared x axis, no rescaling: same log10-log10 units on both sides, so the
-# money bars being longer is the finding, not a plotting artefact.
 p_coef <- ggplot(coef_df, aes(x = estimate, y = label, colour = outcome)) +
   geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
   geom_pointrange(aes(xmin = lo, xmax = hi), size = 0.45,
@@ -231,8 +221,7 @@ p_event <- ggplot(es_df, aes(x = event_time, y = estimate, colour = outcome)) +
   geom_hline(yintercept = 0, colour = "grey60") +
   geom_vline(xintercept = 0, linetype = "dashed", colour = "grey75") +
   geom_pointrange(aes(ymin = lo, ymax = hi),
-                  position = position_dodge(width = 0.25)) +
-  geom_line(position = position_dodge(width = 0.25), alpha = 0.4) +
+                  position = position_dodge(width = 0.15)) +
   scale_x_continuous(breaks = -2:2) +
   scale_colour_manual(values = OUTCOME_COLOURS, name = NULL) +
   guides(colour = guide_legend(reverse = TRUE)) +   # same key order as fig. 10

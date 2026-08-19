@@ -16,7 +16,6 @@ library(sf)   # the only script that needs it
 # -----------------------------------------------------------------------------
 #### Municipal mesh
 # -----------------------------------------------------------------------------
-# Read here, not in 00_setup.R: 2,7 MB of GeoJSON that only this script uses.
 
 muni_mesh <- st_read(file.path(PATH_IBGE, FILE_MESH), quiet = TRUE) %>%
   mutate(code_muni = as.character(as.integer(code_muni)))
@@ -43,7 +42,6 @@ stopifnot(
 # -----------------------------------------------------------------------------
 #### Rank-quintiles over one population, shared by figures 1, 2, 4 and 5
 # -----------------------------------------------------------------------------
-# The 220 without a year above the threshold are a category, not a low quintile.
 
 N_NO_PRESSURE <- 220
 
@@ -74,7 +72,8 @@ CAT_GAP  <- unname(GAP_PALETTE["absolute_gap"])
 Q_LABELS <- c("0" = "sem pressão", "1" = "1", "2" = "2",
               "3" = "3", "4" = "4", "5" = "5")
 
-# One ramp per quantity: a shared one would read as a shared scale.
+Q_BREAKS <- c("1", "2", "3", "4", "5", "0")
+
 DEFOR_PALETTE <- c("0" = CAT_NONE, QUINTILE_PALETTE)
 EGS_PALETTE   <- c("0" = CAT_NONE, setNames(EGS_RAMP, as.character(1:5)))
 
@@ -93,6 +92,24 @@ stopifnot("uf_borders: expected the 9 Legal Amazon states" =
 
 state_layer <- geom_sf(data = uf_borders, fill = NA, colour = "#4a534c",
                        linewidth = 0.35, inherit.aes = FALSE)
+
+UF_SIGLAS <- c("11" = "RO", "12" = "AC", "13" = "AM", "14" = "RR",
+               "15" = "PA", "16" = "AP", "17" = "TO", "21" = "MA",
+               "51" = "MT")
+
+uf_points <- suppressWarnings(
+  uf_borders %>%
+    mutate(sigla = UF_SIGLAS[uf_code]) %>%
+    st_point_on_surface())
+
+stopifnot("uf labels: some state has no abbreviation" =
+            !anyNA(uf_points$sigla))
+
+state_labels <- geom_sf_label(data = uf_points, aes(label = sigla),
+                              colour = "#2b332c", fill = "#ffffffcc",
+                              label.size = 0, size = 3.1, fontface = "bold",
+                              label.padding = unit(0.12, "lines"),
+                              inherit.aes = FALSE)
 
 # -----------------------------------------------------------------------------
 #### Top-20 highlight (outline)
@@ -120,9 +137,11 @@ outline_layer <- list(
 m_defor_abs <- ggplot(map_data) +
   geom_sf(aes(fill = q_defor_abs), colour = "white", linewidth = 0.05) +
   scale_fill_manual(values = DEFOR_PALETTE, labels = Q_LABELS,
+                    breaks = Q_BREAKS,
                     name = "Quintil de\ndesmatamento acumulado") +
   state_layer +
   outline_layer +
+  state_labels +
   theme_map
 
 # -----------------------------------------------------------------------------
@@ -132,9 +151,11 @@ m_defor_abs <- ggplot(map_data) +
 m_defor_pct <- ggplot(map_data) +
   geom_sf(aes(fill = q_defor_pct), colour = "white", linewidth = 0.05) +
   scale_fill_manual(values = DEFOR_PALETTE, labels = Q_LABELS,
+                    breaks = Q_BREAKS,
                     name = "Quintil de\n% do território\ndesmatado") +
   state_layer +
   outline_layer +
+  state_labels +
   theme_map
 
 # -----------------------------------------------------------------------------
@@ -168,13 +189,16 @@ RESPONSE_PALETTE <- c(none = CAT_NONE, gap = CAT_GAP,
                       setNames(RESPONSE_RAMP, as.character(1:5)))
 RESPONSE_LABELS  <- c(none = "sem pressão", gap = "com pressão, sem multa",
                       "1" = "1", "2" = "2", "3" = "3", "4" = "4", "5" = "5")
+RESPONSE_BREAKS  <- c("1", "2", "3", "4", "5", "gap", "none")
 
 m_response <- ggplot(map_data) +
   geom_sf(aes(fill = q_response), colour = "white", linewidth = 0.05) +
   scale_fill_manual(values = RESPONSE_PALETTE, labels = RESPONSE_LABELS,
-                    name = "Quintil da resposta federal\n(autos \u00d7 multas)") +
+                    breaks = RESPONSE_BREAKS,
+                    name = "Quintil da resposta federal\n(média geométrica dos logs\nde autos e multas)") +
   state_layer +
   outline_layer +
+  state_labels +
   theme_map
 
 # -----------------------------------------------------------------------------
@@ -184,9 +208,11 @@ m_response <- ggplot(map_data) +
 m_egs <- ggplot(map_data) +
   geom_sf(aes(fill = q_egs), colour = "white", linewidth = 0.05) +
   scale_fill_manual(values = EGS_PALETTE, labels = Q_LABELS,
+                    breaks = Q_BREAKS,
                     name = "Quintil de\nEGS médio (18 anos)") +
   state_layer +
   outline_layer +
+  state_labels +
   theme_map
 
 # -----------------------------------------------------------------------------
@@ -199,6 +225,7 @@ m_egs_trend <- ggplot(map_data) +
                     name = "EGS recente (2023-2025)\ncontra o histórico") +
   state_layer +
   outline_layer +
+  state_labels +
   theme_map
 
 # -----------------------------------------------------------------------------
