@@ -133,7 +133,7 @@ Os valores esperados nos blocos de check (`01_n_ibama_clean = 60707`, `06_total_
 
 Antes de comparar um check `failed` com o pipeline, confirme se algum dos 5 arquivos foi rebaixado depois dessas datas. Se sim, o esperado do check é o que precisa ser atualizado, não o SQL.
 
-O mesmo contrato vale para a suíte `viz/`: os números que os relatórios publicam e que nascem na camada R (coeficientes de painel e do event study; as contagens das bandas de direção nascem no SQL e o R apenas as confere) estão fixados como constantes `PUB_*` ou `N_*` no script que os produz, asseridas com `stopifnot()` logo abaixo do cálculo. Se um deles falhar depois de rebaixar dados, o que precisa mudar é o esperado e o texto que o publica, não o código. `grep "^PUB_" viz/*.R` lista o inventário completo.
+O mesmo contrato vale para a suíte `viz/`: os números que os relatórios publicam e que nascem na camada R (coeficientes de painel e do event study; as contagens das bandas de direção nascem no SQL e o R apenas as confere) estão fixados como constantes `PUB_*` ou `N_*` no script que os produz, asseridas com `stopifnot()` logo abaixo do cálculo. Se um deles falhar depois de rebaixar dados, o que precisa mudar é o esperado e o texto que o publica, não o código. `grep -E "^(PUB_|N_)" viz/*.R` lista o inventário completo.
 
 ---
 
@@ -165,7 +165,7 @@ Mudanças de substância entre versões, incluindo as que alteraram números pub
 ## Limitações conhecidas (resumo, detalhamento em `deliverables/EGMS_03_relatorio_estendido.docx`)
 
 - O índice mede lacuna de fiscalização *federal*. Só autos do IBAMA entram como resposta; aparatos estaduais ativos (SEMAS-PA, IPAAM-AM) não são capturados. Um EGS alto é compatível com ausência real, substituição estadual ou presença federal sem efeito.
-- Dentro do próprio dado federal, só entram autos de tipo desmatamento. Nos vinte municípios do topo, são 1.187 dos 3.513 que o IBAMA lavrou no período, ou 34%: o resto é fauna, pesca, controle ambiental, cadastro e unidade de conservação (esta última a mesma lacuna do ICMBio que Porto de Moz ilustra). Onde o vetor da supressão é garimpo, a resposta federal chega por instrumento que o índice não pontua.
+- Dentro do próprio dado federal, só entram autos de tipo desmatamento. Nos vinte municípios do topo, são 1.187 dos 3.052 que o IBAMA lavrou no período, ou cerca de 39%: o resto é fauna, pesca, controle ambiental, cadastro e unidade de conservação (esta última a mesma lacuna do ICMBio que Porto de Moz ilustra). Onde o vetor da supressão é garimpo, a resposta federal chega por instrumento que o índice não pontua.
 - PRODES ≠ desmatamento ilegal. O índice não distingue supressão autorizada (AUTEX/DOF) de ilegal; casos verificados em Barra do Bugres/MT, Oriximiná, Autazes e Acará.
 - Resposta = autos lavrados. Embargos, apreensões, ação penal e arrecadação efetiva das multas não entram.
 - EGS é ordinal na prática. A ordenação é robusta, testada por sensibilidade; distâncias entre scores não têm interpretação direta.

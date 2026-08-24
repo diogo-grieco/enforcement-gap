@@ -1,9 +1,11 @@
 # IBAMA, autos de infração (versão pública, sem PII)
 
 Derivado do dado bruto do IBAMA (`data/data_ibama/`, não versionado, contém
-nome e CPF/CNPJ do autuado). Esta pasta mantém, de cada CSV anual, apenas as
-13 das 84 colunas originais efetivamente lidas em algum ponto do pipeline SQL
-ou da suíte `viz/`:
+nome e CPF/CNPJ do autuado). Esta pasta mantém, de cada CSV anual, 13 das 84
+colunas originais. Nove são lidas pelo pipeline SQL; `DT_FATO_INFRACIONAL` é
+lida só pelo `exploration/`; `CPF_CNPJ_INFRATOR`, `CD_TERMOS_EMBARGOS` e
+`CD_TERMOS_APREENSAO` não são lidas por script nenhum e ficam como referência
+à estrutura do dado original:
 
 ```
 COD_MUNICIPIO, UF, DAT_HORA_AUTO_INFRACAO, DT_FATO_INFRACIONAL,
