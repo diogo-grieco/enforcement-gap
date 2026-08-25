@@ -31,10 +31,11 @@ project2/
 ├── viz/                         (suíte de visualização; ver viz/README.md)
 │   ├── 00_setup.R, prep_mesh.R, 01_maps.R … 04_panel_effects.R
 │   └── README.md
-├── deliverables/
+├── deliverables/                (cada relatório em .docx e no PDF gerado a partir dele)
 │   ├── EGMS_01_resumo_executivo.docx
-│   ├── EGMS_02_writing_sample.docx
-│   └── EGMS_03_relatorio_estendido.docx
+│   ├── EGMS_01_resumo_executivo.pdf
+│   ├── EGMS_02_relatorio_estendido.docx
+│   └── EGMS_02_relatorio_estendido.pdf
 ├── project2.duckdb              (gerado ao rodar o pipeline, não versionado)
 ├── data/
 │   ├── data_prodes/
@@ -147,22 +148,22 @@ Dados brutos (`data/data_prodes/`, `data/data_ibama_public/`, `data/data_ibge/`,
 
 ## Licenças e citação
 
-O código-fonte (`pipeline/`, `viz/`, `exploration/`) está sob licença **MIT**, ver [`LICENSE`](LICENSE). Os dados derivados, parquets, visualizações e os três relatórios em `deliverables/` estão sob **Creative Commons Attribution 4.0 (CC BY 4.0)**, ver [`LICENSE-DATA.md`](LICENSE-DATA.md). Para citar este trabalho, ver [`CITATION.cff`](CITATION.cff).
+O código-fonte (`pipeline/`, `viz/`, `exploration/`) está sob licença **MIT**, ver [`LICENSE`](LICENSE). Os dados derivados, parquets, visualizações e os relatórios em `deliverables/` estão sob **Creative Commons Attribution 4.0 (CC BY 4.0)**, ver [`LICENSE-DATA.md`](LICENSE-DATA.md). Para citar este trabalho, ver [`CITATION.cff`](CITATION.cff).
 
-Mudanças de substância entre versões, incluindo as que alteraram números publicados, estão resumidas na seção "Registro de mudanças" de [`deliverables/EGMS_03_relatorio_estendido.docx`](deliverables/EGMS_03_relatorio_estendido.docx).
+Mudanças de substância entre versões, incluindo as que alteraram números publicados, estão resumidas na seção "Registro de mudanças" de [`deliverables/EGMS_02_relatorio_estendido.docx`](deliverables/EGMS_02_relatorio_estendido.docx).
 
 ---
 
 ## Documentação do projeto
 
-- `deliverables/EGMS_01_resumo_executivo.docx`: síntese de 2 a 3 páginas.
-- `deliverables/EGMS_02_writing_sample.docx`: texto autoral completo, com decisões metodológicas, validação, resultados e limites.
-- `deliverables/EGMS_03_relatorio_estendido.docx`: apêndice técnico completo, com todas as decisões e o teste empírico correspondente.
+- `deliverables/EGMS_01_resumo_executivo.docx`: síntese de 6 páginas, com o ranking do top 20 e três figuras.
+- `deliverables/EGMS_02_relatorio_estendido.docx`: apêndice técnico completo, com todas as decisões e o teste empírico correspondente.
+- Cada um acompanha o PDF de mesmo nome, gerado a partir do próprio `.docx`. É o PDF que fixa a paginação declarada no sumário do relatório estendido.
 - `viz/README.md`: como rodar a suíte de visualização.
 
 ---
 
-## Limitações conhecidas (resumo, detalhamento em `deliverables/EGMS_03_relatorio_estendido.docx`)
+## Limitações conhecidas (resumo, detalhamento em `deliverables/EGMS_02_relatorio_estendido.docx`)
 
 - O índice mede lacuna de fiscalização *federal*. Só autos do IBAMA entram como resposta; aparatos estaduais ativos (SEMAS-PA, IPAAM-AM) não são capturados. Um EGS alto é compatível com ausência real, substituição estadual ou presença federal sem efeito.
 - Dentro do próprio dado federal, só entram autos de tipo desmatamento. Nos vinte municípios do topo, são 1.187 dos 3.052 que o IBAMA lavrou no período, ou cerca de 39%: o resto é fauna, pesca, controle ambiental, cadastro e unidade de conservação (esta última a mesma lacuna do ICMBio que Porto de Moz ilustra). Onde o vetor da supressão é garimpo, a resposta federal chega por instrumento que o índice não pontua.
