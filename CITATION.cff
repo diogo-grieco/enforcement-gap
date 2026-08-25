@@ -6,6 +6,8 @@ abstract: >-
   ambiental federal (IBAMA) na Amazônia Legal, produzindo o Enforcement Gap Score
   (EGS), um índice município-ano do desequilíbrio entre pressão de desmatamento
   e resposta institucional federal, e um ranking municipal consolidado.
+  Licenciamento duplo: MIT para o código-fonte; CC BY 4.0 para os dados
+  derivados, as visualizações e os relatórios em deliverables/.
 type: software
 authors:
   - family-names: "Grieco"
@@ -15,12 +17,12 @@ version: 1.2.0
 date-released: 2026-08-25
 url: "https://github.com/diogo-grieco/enforcement-gap"
 repository-code: "https://github.com/diogo-grieco/enforcement-gap"
-# Licenciamento duplo: MIT para o código-fonte (pipeline/, viz/, exploration/);
-# CC BY 4.0 para dados derivados, parquets, visualizações e os relatórios em
-# deliverables/. Ver LICENSE e LICENSE-DATA.md.
-license:
-  - MIT
-  - CC-BY-4.0
+# O campo license abaixo declara a licenca do codigo-fonte, que e o artefato
+# de software que este arquivo cita. O deposito e de licenciamento duplo:
+# MIT para o codigo (pipeline/, viz/, exploration/) e CC BY 4.0 para os dados
+# derivados, parquets, visualizacoes e os relatorios em deliverables/.
+# Ver LICENSE e LICENSE-DATA.md. O Zenodo aceita uma licenca por registro.
+license: MIT
 keywords:
   - desmatamento
   - Amazônia Legal
