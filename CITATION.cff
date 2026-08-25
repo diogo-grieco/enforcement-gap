@@ -14,6 +14,12 @@ authors:
     given-names: "Diogo"
     orcid: "https://orcid.org/0009-0009-7859-0331"
 version: 1.2.0
+# DOI de conceito: resolve sempre para a versao mais recente.
+doi: 10.5281/zenodo.22099281
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22099282
+    description: "DOI da versao 1.2.0, para citar exatamente este snapshot."
 date-released: 2026-08-25
 url: "https://github.com/diogo-grieco/enforcement-gap"
 repository-code: "https://github.com/diogo-grieco/enforcement-gap"

@@ -1,5 +1,7 @@
 # Enforcement Gap Monitoring System (EGMS)
 
+[![DOI](https://zenodo.org/badge/1307118099.svg)](https://doi.org/10.5281/zenodo.22099281)
+
 Pipeline DuckDB + SQL + R que cruza desmatamento (PRODES/INPE) com fiscalização ambiental federal (IBAMA) na Amazônia Legal, produzindo o **Enforcement Gap Score (EGS)** (um índice de município-ano que mede o desequilíbrio entre pressão de desmatamento e resposta institucional federal) e um ranking municipal consolidado (`egs_ranking`).
 
 Autor: Diogo Grieco.
